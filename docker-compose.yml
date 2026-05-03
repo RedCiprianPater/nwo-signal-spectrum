@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  nwo-spectrum:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      - NWO_SPECTRUM_DB_PATH=/data/signals.db
+      - NWO_SPECTRUM_WEB3_RPC=https://mainnet.base.org
+      - NWO_SPECTRUM_CONTRACT_ADDRESS=${CONTRACT_ADDRESS}
+      - SUSCAN_PATH=/usr/local/bin/suscan
+    volumes:
+      - ./data:/data
+      - ./config:/var/www/html/config
+      - /dev/bus/usb:/dev/bus/usb  # For SDR devices
+    devices:
+      - /dev/sdr0:/dev/sdr0  # RTL-SDR
+    restart: unless-stopped
+    networks:
+      - nwo-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - nwo-network
+
+  # Optional: WebSocket server for real-time updates
+  websocket:
+    build: ./websocket
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - nwo-network
+
+volumes:
+  redis-data:
+
+networks:
+  nwo-network:
+    driver: bridge

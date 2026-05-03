@@ -1,0 +1,371 @@
+openapi: 3.0.0
+info:
+  title: NWO Signal Spectrum API
+  description: Signal analysis and spectrum monitoring for NWO Robotics
+  version: 1.0.0
+  contact:
+    name: NWO Capital
+    url: https://nwo.capital
+    email: dev@nwo.capital
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://nwo.capital/api/spectrum
+    description: Production
+
+tags:
+  - name: Analysis
+    description: Signal analysis operations
+  - name: Signals
+    description: Signal management
+  - name: Network
+    description: Agent network coordination
+  - name: Devices
+    description: SDR device management
+
+paths:
+  /api/v1/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  service:
+                    type: string
+                    example: NWO Signal Spectrum API
+                  version:
+                    type: string
+                    example: 1.0.0
+
+  /api/v1/analyze:
+    post:
+      tags: [Analysis]
+      summary: Start spectrum analysis
+      security:
+        - walletAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - frequency
+              properties:
+                frequency:
+                  type: number
+                  description: Center frequency in Hz
+                  example: 433920000
+                bandwidth:
+                  type: number
+                  description: Bandwidth in Hz
+                  example: 2000000
+                duration:
+                  type: integer
+                  description: Analysis duration in seconds
+                  example: 10
+                device:
+                  type: string
+                  description: SDR device ID
+                  example: rtlsdr-0
+      responses:
+        '200':
+          description: Analysis started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  analysis_id:
+                    type: string
+                    example: abc123...
+                  frequency:
+                    type: number
+                  bandwidth:
+                    type: number
+                  estimated_duration:
+                    type: integer
+
+  /api/v1/signals:
+    get:
+      tags: [Signals]
+      summary: Get detected signals
+      parameters:
+        - name: freq_min
+          in: query
+          schema:
+            type: number
+        - name: freq_max
+          in: query
+          schema:
+            type: number
+        - name: modulation
+          in: query
+          schema:
+            type: string
+            enum: [FM, AM, SSB, FSK, PSK, ASK]
+        - name: agent
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: List of signals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  count:
+                    type: integer
+                  signals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Signal'
+
+  /api/v1/signals/{id}:
+    get:
+      tags: [Signals]
+      summary: Get signal details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Signal details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Signal'
+        '404':
+          description: Signal not found
+
+  /api/v1/decode:
+    post:
+      tags: [Signals]
+      summary: Decode a signal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - signal_id
+              properties:
+                signal_id:
+                  type: string
+                mode:
+                  type: string
+                  enum: [auto, FM, AM, SSB, FSK, PSK]
+                  default: auto
+      responses:
+        '200':
+          description: Decoded signal
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  decoded:
+                    type: object
+
+  /api/v1/share:
+    post:
+      tags: [Network]
+      summary: Share signal with network
+      security:
+        - walletAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - signal
+              properties:
+                signal:
+                  $ref: '#/components/schemas/Signal'
+      responses:
+        '200':
+          description: Signal shared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  shared_id:
+                    type: string
+
+  /api/v1/network/signals:
+    get:
+      tags: [Network]
+      summary: Get network-wide signals
+      parameters:
+        - name: freq_min
+          in: query
+          schema:
+            type: number
+        - name: freq_max
+          in: query
+          schema:
+            type: number
+        - name: classification
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Network signals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  signals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NetworkSignal'
+
+  /api/v1/consensus:
+    post:
+      tags: [Network]
+      summary: Submit classification vote
+      security:
+        - walletAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - signal_id
+                - classification
+              properties:
+                signal_id:
+                  type: string
+                classification:
+                  type: string
+                confidence:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+      responses:
+        '200':
+          description: Vote submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  consensus:
+                    type: object
+
+  /api/v1/devices:
+    get:
+      tags: [Devices]
+      summary: List SDR devices
+      responses:
+        '200':
+          description: Device list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+
+components:
+  schemas:
+    Signal:
+      type: object
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        agent:
+          type: string
+        frequency_hz:
+          type: integer
+        bandwidth_hz:
+          type: integer
+        modulation:
+          type: string
+        signal_strength_dbm:
+          type: number
+        confidence:
+          type: number
+        classification:
+          type: string
+        metadata:
+          type: object
+
+    NetworkSignal:
+      allOf:
+        - $ref: '#/components/schemas/Signal'
+        - type: object
+          properties:
+            shared_by:
+              type: string
+            vote_count:
+              type: integer
+            consensus_classification:
+              type: string
+
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        driver:
+          type: string
+        available:
+          type: boolean
+
+  securitySchemes:
+    walletAuth:
+      type: apiKey
+      in: header
+      name: X-NWO-Wallet
