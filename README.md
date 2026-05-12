@@ -1,132 +1,35 @@
 # NWO Signal Spectrum
 
-[![NWO Robotics](https://img.shields.io/badge/NWO-Robotics-00ff88)](https://nwo.capital)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![API Version](https://img.shields.io/badge/API-v1.0.0-orange)](openapi.yaml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PHP](https://img.shields.io/badge/PHP-8.0+-blue.svg)](https://php.net/)
+[![Web3](https://img.shields.io/badge/Web3-Ethereum-3C3C3D)](https://ethereum.org/)
 
-**Signal Analysis & Spectrum Intelligence for NWO Robotics**
+**Multi-Agent RF Signal Analysis & Apocalypse Detection Network**
 
-NWO Signal Spectrum integrates [SigDigger](https://github.com/batchdrake/sigdigger)'s core DSP capabilities (via suscan/sigutils) into the NWO Robotics ecosystem, enabling AI agents to analyze radio signals, share spectrum intelligence, and coordinate signal analysis operations across the agent network.
+NWO Signal Spectrum is a distributed signal intelligence platform that combines RF spectrum analysis with apocalyptic threat detection. It enables agents to collaboratively identify, classify, and respond to anomalous signals—from radio frequencies to seismic activity, solar flares, and asteroid approaches.
 
-## 🌐 Overview
+## 🌟 Features
 
-NWO Signal Spectrum provides a bridge between software-defined radio (SDR) hardware and the NWO Robotics agent network. It allows robots and AI agents to:
+### Core Capabilities
+- **🔍 RF Signal Analysis** - Real-time spectrum monitoring with SigDigger integration
+- **🤖 Multi-Agent Consensus** - Distributed classification via agent voting
+- **🔐 Web3 Authentication** - Wallet-based access control
+- **📊 Real-time Dashboard** - Live signal feeds and analytics
+- **🚨 Apocalypse Indicators** - 6-category threat detection system
 
-- **Analyze RF signals** in real-time across multiple frequency bands
-- **Detect and classify** modulation types (FSK, PSK, ASK, analog voice/video)
-- **Decode signals** using extensible codec interfaces
-- **Monitor spectrum** for anomalies, interference, and threats
-- **Share intelligence** across the agent network via P2P protocol
-- **Coordinate analysis** through consensus-based classification
+### Signal Types Supported
+| Category | Source | Status |
+|----------|--------|--------|
+| RF Spectrum | SigDigger/RTL-SDR | ✅ Active |
+| Aviation | ADS-B Exchange | ✅ Active |
+| Seismic | USGS Earthquake API | ✅ Active |
+| Solar/Space | NOAA SWPC | ✅ Active |
+| Radiation | Safecast Network | ✅ Active |
+| Asteroids | NASA NEO API | ✅ Active |
 
-### Architecture
+## 🚀 Quick Start
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        NWO Robotics Ecosystem                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
-│  │   Signal     │  │   Signal     │  │   Signal     │              │
-│  │  Analyzer    │  │   Decoder    │  │   Monitor    │              │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘              │
-└─────────┼─────────────────┼─────────────────┼──────────────────────┘
-          │                 │                 │
-          └─────────────────┼─────────────────┘
-                            │
-              ┌─────────────▼─────────────┐
-              │   NWO Signal Spectrum API  │
-              │  ┌─────────────────────┐  │
-              │  │   Spectrum Engine   │  │
-              │  │  (suscan/sigutils)  │  │
-              │  └─────────────────────┘  │
-              └───────────────────────────┘
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-    ┌─────▼─────┐    ┌─────▼─────┐    ┌─────▼─────┐
-    │   SDR     │    │  Signal   │    │  Agent    │
-    │  Device   │    │   Share   │    │  Network  │
-    │(SoapySDR) │    │  Protocol │    │ (P2P/API) │
-    └───────────┘    └───────────┘    └───────────┘
-```
-
-## 🚀 Features
-
-### Signal Analysis
-- **Real-time spectrum analysis** with configurable FFT size and refresh rates
-- **Modulation detection**: FSK, PSK, ASK, FM, AM, SSB, analog video
-- **Signal parameter estimation**: frequency, bandwidth, SNR, constellation
-- **Burst signal analysis** for intermittent transmissions
-- **Frequency hopping detection** and tracking
-
-### Signal Decoding
-- **Analog voice demodulation**: AM, FM, SSB
-- **Digital mode decoding**: Custom codec interface for proprietary protocols
-- **Video signal decoding**: Analog TV, drone FPV
-- **Extensible codec system** for adding new modulation types
-
-### Multi-Agent Coordination
-- **Signal intelligence sharing** via standardized protocol
-- **Distributed spectrum monitoring** across multiple agents
-- **Agent-to-agent communication** via WebSocket and webhooks
-- **Consensus-based classification** with reputation scoring
-
-### Web3 Integration
-- **Wallet-based API authentication** (MetaMask, WalletConnect)
-- **Signal analysis NFTs** for provenance and ownership
-- **On-chain signal intelligence registry** (Base Mainnet)
-- **Tokenized spectrum access** for premium features
-
-## 📋 Table of Contents
-
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [API Endpoints](#api-endpoints)
-- [NWO Robotics Integration](#nwo-robotics-integration)
-- [Signal Sharing Protocol](#signal-sharing-protocol)
-- [Python Client](#python-client)
-- [Docker Deployment](#docker-deployment)
-- [Configuration](#configuration)
-- [Contributing](#contributing)
-
-## 🔧 Installation
-
-### Prerequisites
-
-- PHP 8.1+ with SQLite3 extension
-- SDR hardware (RTL-SDR, HackRF, Airspy) with SoapySDR drivers
-- FFTW3, libsndfile, libxml2 development libraries
-- Redis (optional, for real-time updates)
-
-### Ubuntu/Debian
-
-```bash
-# Install system dependencies
-sudo apt-get update
-sudo apt-get install -y \
-    php8.1 php8.1-sqlite3 php8.1-curl \
-    libfftw3-dev libsndfile1-dev libsoapysdr-dev libxml2-dev \
-    cmake build-essential git sqlite3 redis-server
-
-# Clone with submodules
-git clone --recursive https://github.com/RedCiprianPater/nwo-signal-spectrum.git
-cd nwo-signal-spectrum
-
-# Build DSP libraries
-mkdir -p build && cd build
-cmake ..
-make -j$(nproc)
-sudo make install
-sudo ldconfig
-
-# Install PHP dependencies
-composer install
-
-# Set permissions
-sudo chown -R www-data:www-data data/
-sudo chmod 755 data/
-```
-
-### Docker (Recommended)
+### Docker Deployment (Recommended)
 
 ```bash
 # Clone repository
@@ -136,114 +39,106 @@ cd nwo-signal-spectrum
 # Start services
 docker-compose up -d
 
-# API available at http://localhost:8080
+# Access dashboard
+open http://localhost:8080
 ```
 
-## ⚡ Quick Start
-
-### 1. Start the API Server
+### Manual Installation
 
 ```bash
-# Using PHP built-in server
-php -S localhost:8080 -t api/
+# Requirements: PHP 8.0+, MySQL 5.7+, Redis, Python 3.8+
 
-# Or using Apache/Nginx with the provided .htaccess
+# 1. Install PHP dependencies
+composer install
+
+# 2. Install Python dependencies
+pip install -r requirements.txt
+
+# 3. Configure database
+cp config/database.example.php config/database.php
+# Edit config/database.php with your credentials
+
+# 4. Run migrations
+php scripts/migrate.php
+
+# 5. Start services
+php -S localhost:8080 -t public/
+redis-server
+python3 scripts/spectrum-monitor.py
 ```
 
-### 2. Connect from NWO Agent
+## 📡 Signal Sources
 
-```python
-from nwo_spectrum import SignalClient
+### RF Spectrum (SigDigger)
+```php
+use NWOSignalSpectrum\SignalAnalyzer;
 
-# Initialize client with wallet
-client = SignalClient(
-    api_url="http://localhost:8080",
-    wallet_address="0xYourWalletAddress"
-)
-
-# Check API health
-health = client.health_check()
-print(f"API Status: {health['status']}")
-
-# List available SDR devices
-devices = client.list_devices()
-for device in devices:
-    print(f"{device['name']} ({device['driver']}): {'Available' if device['available'] else 'In Use'}")
-
-# Start spectrum analysis
-analysis_id = client.analyze_spectrum(
-    frequency=433.92e6,  # 433.92 MHz (ISM band)
-    bandwidth=2e6,       # 2 MHz bandwidth
-    duration=30,         # 30 seconds
-    device='rtlsdr-0'
-)
-print(f"Started analysis: {analysis_id}")
-
-# Get detected signals
-signals = client.get_signals(limit=10)
-for sig in signals:
-    print(f"[{sig.modulation}] {sig.frequency_hz/1e6:.3f} MHz "
-          f"({sig.signal_strength_dbm:.1f} dBm, {sig.confidence*100:.0f}% confidence)")
+$analyzer = new SignalAnalyzer($device);
+$signals = $analyzer->scan(
+    frequency: 433920000, // 433.92 MHz
+    bandwidth: 2000000,   // 2 MHz
+    duration: 30          // 30 seconds
+);
 ```
 
-### 3. Share Signal with Network
+### Aviation Anomalies (ADS-B)
+```php
+use NWOSignalSpectrum\ApocalypseIndicators;
 
-```python
-# Detected a suspicious signal
-suspicious_signal = {
-    'signal_id': 'sig-001',
-    'frequency_hz': 433920000,
-    'bandwidth_hz': 12500,
-    'modulation': 'FM',
-    'signal_strength_dbm': -45,
-    'confidence': 0.95,
-    'classification': 'voice',
-    'metadata': {
-        'location': {'lat': 59.9139, 'lon': 10.7522},
-        'device': 'rtl-sdr-v3',
-        'antenna': 'dipole-433'
-    }
-}
+$indicators = new ApocalypseIndicators($db);
+$anomaly = $indicators->detectAviationAnomaly('davos');
 
-# Share with agent network
-shared_id = client.share_signal(suspicious_signal)
-print(f"Shared signal: {shared_id}")
-
-# Get network consensus
-consensus = client.submit_classification(
-    signal_id='sig-001',
-    classification='potential_threat',
-    confidence=0.87
-)
-print(f"Network consensus: {consensus['consensus']['classification']}")
+// Returns: 450 business jets (3.0x normal)
 ```
 
-## 🔌 API Endpoints
+### Seismic Monitoring (USGS)
+```php
+$seismic = $indicators->detectSeismicAnomaly(hours: 24);
 
-### Signal Analysis
+// Returns: Cluster of 4 M6+ earthquakes
+```
 
-#### Start Analysis
+### Solar Activity (NOAA)
+```php
+$solar = $indicators->detectSolarAnomaly();
+
+// Returns: X-class flare detected
+```
+
+## 🔌 API Reference
+
+### Authentication
+All API requests require Web3 wallet authentication:
+
 ```http
-POST /api/v1/analyze
+POST /api/v1/auth
 Content-Type: application/json
 X-NWO-Wallet: 0x...
+X-NWO-Signature: 0x...
 
 {
-  "frequency": 433920000,
-  "bandwidth": 2000000,
-  "duration": 10,
-  "device": "rtlsdr-0"
+  "message": "Authenticate for NWO Signal Spectrum",
+  "timestamp": 1715500800
 }
 ```
 
-**Response:**
-```json
+### Signal Endpoints
+
+#### Submit Signal
+```http
+POST /api/v1/signals
+Authorization: Bearer <token>
+
 {
-  "status": "success",
-  "analysis_id": "a1b2c3d4e5f6...",
-  "frequency": 433920000,
-  "bandwidth": 2000000,
-  "estimated_duration": 10
+  "frequency_hz": 433920000,
+  "bandwidth_hz": 12500,
+  "modulation": "FM",
+  "signal_strength_dbm": -75,
+  "classification": "unknown",
+  "location": {
+    "lat": 40.7128,
+    "lon": -74.0060
+  }
 }
 ```
 
@@ -252,452 +147,257 @@ X-NWO-Wallet: 0x...
 GET /api/v1/signals?freq_min=433000000&freq_max=434000000&limit=50
 ```
 
-**Response:**
-```json
-{
-  "status": "success",
-  "count": 3,
-  "signals": [
-    {
-      "id": "sig-001",
-      "timestamp": "2026-05-03T10:00:00Z",
-      "agent": "0xAgentWallet...",
-      "frequency_hz": 433920000,
-      "bandwidth_hz": 12500,
-      "modulation": "FM",
-      "signal_strength_dbm": -45.2,
-      "confidence": 0.95,
-      "classification": "voice",
-      "metadata": {...}
-    }
-  ]
-}
-```
-
-#### Decode Signal
-```http
-POST /api/v1/decode
-Content-Type: application/json
-
-{
-  "signal_id": "sig-001",
-  "mode": "FM"
-}
-```
-
-### Agent Coordination
-
-#### Share Signal
-```http
-POST /api/v1/share
-Content-Type: application/json
-X-NWO-Wallet: 0x...
-X-NWO-Signature: 0x...
-
-{
-  "signal": {
-    "signal_id": "sig-001",
-    "frequency_hz": 433920000,
-    "modulation": "FM",
-    ...
-  }
-}
-```
-
-#### Get Network Signals
-```http
-GET /api/v1/network/signals?classification=voice&limit=100
-```
-
 #### Submit Consensus Vote
 ```http
-POST /api/v1/consensus
-Content-Type: application/json
-X-NWO-Wallet: 0x...
+POST /api/v1/signals/{id}/vote
+Authorization: Bearer <token>
 
 {
-  "signal_id": "sig-001",
   "classification": "voice",
-  "confidence": 0.95
+  "confidence": 0.85,
+  "notes": "Likely aviation communication"
 }
 ```
 
-### Device Management
+### Apocalypse Endpoints
 
-#### List Devices
+#### Get Current Level
 ```http
-GET /api/v1/devices
+GET /api/v1/apocalypse/level
 ```
 
-#### Configure Device
-```http
-POST /api/v1/devices/rtlsdr-0/configure
-Content-Type: application/json
-
-{
-  "config": {
-    "sample_rate": 2048000,
-    "gain": 40,
-    "ppm_error": 0
-  }
-}
-```
-
-## 🤖 NWO Robotics Integration
-
-### Agent Capabilities
-
-Add to your agent's capability manifest:
-
-```yaml
-capabilities:
-  signal_analysis:
-    - spectrum_monitoring
-    - modulation_detection
-    - signal_decoding
-    - burst_analysis
-    - frequency_hopping_tracking
-  
-  coordination:
-    - signal_sharing
-    - distributed_analysis
-    - consensus_voting
-    - threat_detection
-  
-  web3:
-    - wallet_auth
-    - nft_minting
-    - onchain_registry
-    - tokenized_access
-```
-
-### Example: Autonomous Signal Investigation
-
-```python
-import asyncio
-from nwo_spectrum import SignalClient, SignalMonitor
-
-class SignalInvestigationAgent:
-    def __init__(self, client: SignalClient):
-        self.client = client
-        self.threats_detected = []
-    
-    async def investigate_frequency(self, frequency: float):
-        """Autonomous signal investigation workflow"""
-        
-        # 1. Analyze spectrum
-        print(f"🔍 Analyzing {frequency/1e6} MHz...")
-        analysis_id = await self.client.analyze_spectrum(
-            frequency=frequency,
-            bandwidth=5e6,
-            duration=60
-        )
-        
-        # 2. Wait for completion and get signals
-        await asyncio.sleep(60)
-        signals = await self.client.get_signals(
-            freq_min=frequency - 2.5e6,
-            freq_max=frequency + 2.5e6
-        )
-        
-        for signal in signals:
-            # 3. Decode if possible
-            if signal.modulation in ['FM', 'AM']:
-                decoded = await self.client.decode_signal(
-                    signal.id, 
-                    mode=signal.modulation
-                )
-                
-                # 4. Analyze content for threats
-                threat_level = self.analyze_content(decoded)
-                
-                if threat_level > 0.7:
-                    # 5. Share with network
-                    signal_data = {
-                        'signal_id': signal.id,
-                        'frequency_hz': signal.frequency_hz,
-                        'modulation': signal.modulation,
-                        'classification': 'threat',
-                        'threat_level': threat_level,
-                        'decoded_preview': decoded.get('preview', '')
-                    }
-                    
-                    shared_id = await self.client.share_signal(signal_data)
-                    print(f"🚨 Threat shared: {shared_id}")
-                    
-                    # 6. Get network consensus
-                    consensus = await self.client.submit_classification(
-                        signal_id=signal.id,
-                        classification='confirmed_threat',
-                        confidence=threat_level
-                    )
-                    
-                    if consensus['consensus']['confidence'] > 0.8:
-                        await self.trigger_security_alert(signal)
-    
-    def analyze_content(self, decoded: dict) -> float:
-        """Analyze decoded content for threats"""
-        # Implement threat detection logic
-        # Return threat level 0-1
-        return 0.5
-    
-    async def trigger_security_alert(self, signal):
-        """Trigger security response"""
-        print(f"🚨 SECURITY ALERT: Threat confirmed at {signal.frequency_hz} Hz")
-        # Integrate with NWO security system
-
-# Usage
-async def main():
-    client = SignalClient(
-        api_url="https://nwo.capital/api/spectrum",
-        wallet_address="0x..."
-    )
-    
-    agent = SignalInvestigationAgent(client)
-    await agent.investigate_frequency(433.92e6)
-
-asyncio.run(main())
-```
-
-### Real-time Monitoring
-
-```python
-from nwo_spectrum import SignalClient, SignalMonitor
-
-client = SignalClient(api_url="http://localhost:8080")
-monitor = SignalMonitor(client)
-
-@monitor.on_signal
-def on_new_signal(signal):
-    """Callback for new signals"""
-    if signal.classification == 'unknown':
-        # Auto-analyze unknown signals
-        decoded = client.decode_signal(signal.id)
-        print(f"🔍 Unknown signal decoded: {decoded}")
-
-# Start monitoring 433 MHz ISM band
-monitor.start(frequency=433.92e6, bandwidth=2e6)
-
-# Run indefinitely
-try:
-    while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    monitor.stop()
-```
-
-## 📡 Signal Sharing Protocol
-
-Agents share signal intelligence using a standardized JSON format:
-
+Response:
 ```json
 {
-  "signal_id": "uuid-v4",
-  "timestamp": "2026-05-03T10:00:00Z",
-  "agent_id": "0xAgentWalletAddress",
-  "frequency_hz": 433920000,
-  "bandwidth_hz": 12500,
-  "modulation": "FM",
-  "signal_strength_dbm": -45.2,
-  "confidence": 0.95,
-  "classification": "voice",
-  "metadata": {
-    "location": {
-      "lat": 59.9139,
-      "lon": 10.7522,
-      "accuracy_m": 10
-    },
-    "device": "rtl-sdr-v3",
-    "antenna": "dipole-433",
-    "environment": "urban"
+  "level": 3,
+  "description": "High - Multiple concerning signals",
+  "active_signals": 5,
+  "breakdown": {
+    "aviation": 2,
+    "seismic": 1,
+    "solar": 1,
+    "radiation": 1
   },
-  "signature": "0x...",
-  "hash": "sha256:..."
+  "timestamp": "2026-05-12T12:00:00Z"
 }
 ```
 
-### Consensus Algorithm
-
-Network consensus is achieved through weighted voting:
-
-```python
-consensus = {
-    "classification": "voice",
-    "confidence": 0.89,
-    "total_votes": 12,
-    "breakdown": [
-        {"classification": "voice", "count": 10, "avg_confidence": 0.92},
-        {"classification": "data", "count": 2, "avg_confidence": 0.65}
-    ],
-    "participating_agents": ["0x...", "0x..."]
-}
+#### Get Active Alerts
+```http
+GET /api/v1/apocalypse/alerts?severity=critical&hours=24
 ```
 
-## 🐍 Python Client
+## 🤖 Agent Network
 
-### Installation
+### Join Network
+```php
+use NWOSignalSpectrum\AgentNetwork;
 
-```bash
-pip install nwo-signal-spectrum
+$network = new AgentNetwork($client);
+$network->join([
+    'wallet' => '0x...',
+    'capabilities' => ['rf_analysis', 'signal_classification'],
+    'region' => 'europe'
+]);
 ```
 
-### Basic Usage
+### Submit Task for Consensus
+```php
+$task = [
+    'type' => 'signal_classification',
+    'signal_id' => 'sig_12345',
+    'proposed_class' => 'military_drone',
+    'evidence' => ['spectrogram_hash', 'audio_sample']
+];
 
-```python
-from nwo_spectrum import SignalClient, Signal
-
-# Initialize
-client = SignalClient(
-    api_url="https://nwo.capital/api/spectrum",
-    wallet_address="0x...",
-    private_key="0x..."  # Optional, for signing
-)
-
-# Health check
-health = client.health_check()
-
-# Analyze spectrum
-analysis_id = client.analyze_spectrum(
-    frequency=433.92e6,
-    bandwidth=2e6,
-    duration=30
-)
-
-# Get signals
-signals: list[Signal] = client.get_signals(limit=50)
-
-# Share with network
-client.share_signal({
-    'frequency_hz': 433920000,
-    'modulation': 'FM',
-    'classification': 'voice'
-})
+$consensus = $network->submitTask($task);
+// Returns consensus after agent voting
 ```
 
-## 🐳 Docker Deployment
+## 📊 Architecture
 
-### Quick Start
-
-```bash
-# Clone repo
-git clone https://github.com/RedCiprianPater/nwo-signal-spectrum.git
-cd nwo-signal-spectrum
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your settings
-
-# Start services
-docker-compose up -d
-
-# Check logs
-docker-compose logs -f nwo-spectrum
 ```
+┌─────────────────────────────────────────────────────────────┐
+│                        Clients                               │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │  Web UI  │  │  Mobile  │  │  Python  │  │   CLI    │   │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘   │
+└───────┼─────────────┼─────────────┼─────────────┼──────────┘
+        │             │             │             │
+        └─────────────┴──────┬──────┴─────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │   API Gateway   │
+                    │  (PHP/Router)   │
+                    └────────┬────────┘
+                             │
+        ┌────────────────────┼────────────────────┐
+        │                    │                    │
+┌───────▼────────┐  ┌────────▼────────┐  ┌───────▼────────┐
+│ SignalAnalyzer │  │ AgentNetwork    │  │ Apocalypse     │
+│ (RF/SDR)       │  │ (Consensus)     │  │ Indicators     │
+└───────┬────────┘  └────────┬────────┘  └───────┬────────┘
+        │                    │                    │
+        └────────────────────┼────────────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │   Database      │
+                    │  (MySQL/Redis)  │
+                    └─────────────────┘
+```
+
+## 🔧 Configuration
 
 ### Environment Variables
+```env
+# Database
+DB_HOST=localhost
+DB_NAME=nwo_spectrum
+DB_USER=spectrum
+DB_PASS=secure_password
 
-```bash
-# API Configuration
-NWO_SPECTRUM_PORT=8080
-NWO_SPECTRUM_DB_PATH=/data/signals.db
+# Redis (for real-time)
+REDIS_HOST=localhost
+REDIS_PORT=6379
 
-# Web3 Configuration
-NWO_WEB3_RPC=https://mainnet.base.org
-NWO_CONTRACT_ADDRESS=0x...
+# Web3
+ETHEREUM_RPC=https://mainnet.infura.io/v3/YOUR_KEY
+CONTRACT_ADDRESS=0x...
 
-# SDR Configuration
-SUSCAN_PATH=/usr/local/bin/suscan
-DEFAULT_SDR_DEVICE=rtlsdr-0
+# APIs
+NASA_API_KEY=your_nasa_api_key
+ADSBEXCHANGE_API_KEY=your_adsb_key
 
-# Redis (optional)
-REDIS_URL=redis://redis:6379
+# Notifications
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
-
-## ⚙️ Configuration
 
 ### Signal Processing Settings
+```php
+// config/spectrum.php
+return [
+    'scan_interval' => 60,        // seconds
+    'anomaly_threshold' => 3.0,   // sigma
+    'consensus_threshold' => 0.67, // 2/3 majority
+    'agent_timeout' => 300,       // seconds
+    
+    'apocalypse' => [
+        'check_interval' => 900,  // 15 minutes
+        'alert_channels' => ['telegram', 'discord', 'webhook'],
+        'min_severity' => 'medium'
+    ]
+];
+```
 
-Create `config/spectrum.json`:
+## 📈 Monitoring
 
-```json
+### Prometheus Metrics
+```
+spectrum_signals_total{type="rf"}
+spectrum_signals_anomaly{type="aviation"}
+spectrum_agents_online
+spectrum_consensus_votes_total
+apocalypse_level_current
+apocalypse_alerts_total{severity="critical"}
+```
+
+### Health Check
+```http
+GET /health
+
 {
-  "spectrum": {
-    "fft_size": 4096,
-    "refresh_rate": 30,
-    "averaging": 4,
-    "window": "hann"
+  "status": "healthy",
+  "version": "1.2.0",
+  "services": {
+    "database": "up",
+    "redis": "up",
+    "sigdigger": "up"
   },
-  "detection": {
-    "threshold_db": -60,
-    "min_bandwidth_hz": 10000,
-    "max_signals": 50,
-    "burst_detection": true
-  },
-  "demodulation": {
-    "enabled_modes": ["FM", "AM", "SSB", "FSK", "PSK"],
-    "default_mode": "FM",
-    "audio_sample_rate": 48000
-  },
-  "network": {
-    "share_enabled": true,
-    "consensus_threshold": 0.7,
-    "reputation_weight": true
-  }
+  "agents_online": 47
 }
 ```
 
-### Device Configuration
+## 🧪 Testing
 
-Create `config/devices/rtlsdr-0.json`:
+```bash
+# Run PHPUnit tests
+./vendor/bin/phpunit
 
-```json
-{
-  "sample_rate": 2048000,
-  "center_frequency": 433920000,
-  "gain": 40,
-  "ppm_error": 0,
-  "antenna": "dipole-433",
-  "bias_tee": false
-}
+# Run Python tests
+pytest tests/
+
+# Integration tests
+php scripts/test-integration.php
+
+# Load testing
+wrk -t12 -c400 -d30s http://localhost:8080/api/v1/signals
+```
+
+## 🚀 Deployment
+
+### Production Checklist
+- [ ] Configure SSL/TLS
+- [ ] Set up Redis cluster
+- [ ] Enable MySQL replication
+- [ ] Configure firewall rules
+- [ ] Set up log rotation
+- [ ] Enable Prometheus monitoring
+- [ ] Configure backups
+
+### Kubernetes
+```yaml
+# k8s/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nwo-spectrum
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nwo-spectrum
+  template:
+    spec:
+      containers:
+      - name: api
+        image: nwo/spectrum:latest
+        ports:
+        - containerPort: 8080
 ```
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing`)
+5. Open Pull Request
 
-### Development Setup
+### Coding Standards
+- PHP: PSR-12
+- Python: PEP 8
+- JavaScript: ESLint Airbnb
 
-```bash
-# Clone repo
-git clone https://github.com/RedCiprianPater/nwo-signal-spectrum.git
-cd nwo-signal-spectrum
+## 📜 License
 
-# Install PHP dependencies
-composer install
+MIT License - See [LICENSE](LICENSE)
 
-# Install Python dependencies
-pip install -e ./python
+## 🙏 Acknowledgments
 
-# Run tests
-composer test
-pytest python/tests/
-```
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file
-
-## 🙏 Credits
-
-- Built on [SigDigger](https://github.com/batchdrake/sigdigger), [suscan](https://github.com/batchdrake/suscan), and [sigutils](https://github.com/batchdrake/sigutils) by [BatchDrake](https://github.com/batchdrake)
-- NWO Robotics integration by [NWO Capital](https://nwo.capital)
+- SigDigger by @batchdrake
+- OpenEEW by IBM/Linux Foundation
+- Safecast global sensor network
+- NASA Open APIs
+- NOAA Space Weather Prediction Center
+- Kyle McDonald's AEWS (inspiration)
 
 ## 📞 Support
 
-- Documentation: https://docs.nwo.capital/signal-spectrum
-- Issues: https://github.com/RedCiprianPater/nwo-signal-spectrum/issues
+- GitHub Issues: https://github.com/RedCiprianPater/nwo-signal-spectrum/issues
 - Discord: https://discord.gg/nwo
-- Twitter: [@NWOCapital](https://twitter.com/NWOCapital)
+- Email: dev@nwo.capital
 
 ---
 

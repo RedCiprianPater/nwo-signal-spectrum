@@ -1,35 +1,67 @@
 # Contributing to NWO Signal Spectrum
 
-Thank you for your interest in contributing to NWO Signal Spectrum! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing!
 
 ## Development Setup
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/nwo-signal-spectrum.git`
+2. Clone your fork
 3. Install dependencies:
    ```bash
    composer install
-   pip install -e ./python
+   pip install -r requirements.txt
    ```
-4. Create a branch: `git checkout -b feature/your-feature-name`
+4. Copy `.env.example` to `.env` and configure
+5. Start Docker services:
+   ```bash
+   docker-compose up -d
+   ```
 
 ## Code Standards
 
-- PHP: Follow PSR-12 coding standards
-- Python: Follow PEP 8
-- Write tests for new features
-- Update documentation
+### PHP
+- Follow PSR-12 coding standards
+- Run `composer style` to check
+- Run `composer style-fix` to auto-fix
 
-## Submitting Changes
+### Python
+- Follow PEP 8
+- Use type hints where possible
+- Run `black` for formatting
 
-1. Commit your changes: `git commit -am 'Add new feature'`
-2. Push to your fork: `git push origin feature/your-feature-name`
-3. Submit a pull request
+### Testing
+```bash
+# PHP tests
+composer test
 
-## Reporting Issues
+# Python tests
+pytest
 
-Please use GitHub Issues to report bugs or request features.
+# Static analysis
+composer analyse
+```
 
-## Code of Conduct
+## Pull Request Process
 
-Be respectful and constructive in all interactions.
+1. Create a feature branch
+2. Make your changes
+3. Add tests
+4. Update documentation
+5. Ensure all checks pass:
+   ```bash
+   composer check
+   ```
+6. Submit PR with clear description
+
+## Commit Messages
+
+Use conventional commits:
+- `feat: Add new signal type`
+- `fix: Correct frequency calculation`
+- `docs: Update API documentation`
+- `test: Add apocalypse indicator tests`
+
+## Questions?
+
+- GitHub Issues: https://github.com/RedCiprianPater/nwo-signal-spectrum/issues
+- Discord: https://discord.gg/nwo
