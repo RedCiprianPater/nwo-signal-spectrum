@@ -1,4 +1,4 @@
-# NWO Signal Spectrum
+# NWO Apocalypse Signal Spectrum
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PHP](https://img.shields.io/badge/PHP-8.0+-blue.svg)](https://php.net/)
