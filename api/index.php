@@ -1,7 +1,9 @@
 <?php
 /**
- * NWO Signal Spectrum API
- * Main API endpoints for signal analysis and agent coordination
+ * NWO Signal Spectrum - API Router v2.0
+ * 
+ * Main entry point for all API endpoints
+ * Includes RF signal analysis, agent network, and apocalypse indicators
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
@@ -9,10 +11,12 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use NWOSignalSpectrum\SignalAnalyzer;
 use NWOSignalSpectrum\AgentNetwork;
 use NWOSignalSpectrum\Web3Auth;
+use NWOSignalSpectrum\ApocalypseIndicators;
 
+// CORS headers
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, X-NWO-Wallet, X-NWO-Signature');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -20,254 +24,433 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Database connection
+$db = new PDO(
+    'mysql:host=' . getenv('DB_HOST') . ';dbname=' . getenv('DB_NAME'),
+    getenv('DB_USER'),
+    getenv('DB_PASS'),
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+);
+
+// Redis for real-time
+$redis = new Redis();
+$redis->connect(getenv('REDIS_HOST') ?: 'localhost', getenv('REDIS_PORT') ?: 6379);
+
+// Router
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];
-$input = json_decode(file_get_contents('php://input'), true) ?: [];
+$pathParts = explode('/', trim($path, '/'));
 
-// Web3 Authentication
-$auth = new Web3Auth();
-$wallet = $_SERVER['HTTP_X_NWO_WALLET'] ?? $input['wallet'] ?? null;
-$signature = $_SERVER['HTTP_X_NWO_SIGNATURE'] ?? $input['signature'] ?? null;
+// Remove 'api' and 'v1' from path
+if ($pathParts[0] === 'api') array_shift($pathParts);
+if ($pathParts[0] === 'v1') array_shift($pathParts);
 
-// Initialize components
-$analyzer = new SignalAnalyzer();
-$network = new AgentNetwork();
-
-$response = ['status' => 'error', 'message' => 'Unknown endpoint'];
-$code = 404;
+$endpoint = $pathParts[0] ?? '';
+$action = $pathParts[1] ?? '';
+$id = $pathParts[2] ?? null;
 
 try {
-    switch ($path) {
-        // Signal Analysis Endpoints
-        case '/api/v1/analyze':
-            if ($method === 'POST') {
-                $frequency = $input['frequency'] ?? null;
-                $bandwidth = $input['bandwidth'] ?? 2e6;
-                $duration = $input['duration'] ?? 10;
-                $device = $input['device'] ?? 'default';
-                
-                if (!$frequency) {
-                    $response = ['status' => 'error', 'message' => 'Frequency required'];
-                    $code = 400;
-                } else {
-                    $analysisId = $analyzer->startAnalysis([
-                        'frequency' => $frequency,
-                        'bandwidth' => $bandwidth,
-                        'duration' => $duration,
-                        'device' => $device,
-                        'agent' => $wallet
-                    ]);
-                    
-                    $response = [
-                        'status' => 'success',
-                        'analysis_id' => $analysisId,
-                        'frequency' => $frequency,
-                        'bandwidth' => $bandwidth,
-                        'estimated_duration' => $duration
-                    ];
-                    $code = 200;
-                }
-            }
+    switch ($endpoint) {
+        // Health check
+        case 'health':
+            handleHealth($db, $redis);
             break;
+            
+        // Authentication
+        case 'auth':
+            handleAuth($method, $db);
+            break;
+            
+        // RF Signals
+        case 'signals':
+            handleSignals($method, $action, $id, $db, $redis);
+            break;
+            
+        // Agent Network
+        case 'agents':
+            handleAgents($method, $action, $id, $db);
+            break;
+            
+        case 'network':
+            handleNetwork($method, $action, $db);
+            break;
+            
+        // Apocalypse Indicators (NEW)
+        case 'apocalypse':
+            handleApocalypse($method, $action, $db);
+            break;
+            
+        // Spectrum Analysis
+        case 'spectrum':
+            handleSpectrum($method, $action, $db);
+            break;
+            
+        // WebSocket token
+        case 'ws-token':
+            handleWsToken($method, $db);
+            break;
+            
+        default:
+            http_response_code(404);
+            echo json_encode(['error' => 'Endpoint not found']);
+    }
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['error' => $e->getMessage()]);
+}
 
-        case '/api/v1/signals':
-            if ($method === 'GET') {
+// Handler Functions
+
+function handleHealth($db, $redis) {
+    $health = [
+        'status' => 'healthy',
+        'version' => '2.0.0',
+        'timestamp' => time(),
+        'services' => [
+            'database' => checkDatabase($db),
+            'redis' => checkRedis($redis),
+        ],
+        'metrics' => [
+            'signals_24h' => getSignalCount($db, 24),
+            'agents_online' => getAgentCount($db),
+            'apocalypse_level' => getCurrentApocalypseLevel($db)
+        ]
+    ];
+    
+    echo json_encode($health);
+}
+
+function handleAuth($method, $db) {
+    if ($method !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['error' => 'Method not allowed']);
+        return;
+    }
+    
+    $data = json_decode(file_get_contents('php://input'), true);
+    $wallet = $_SERVER['HTTP_X_NWO_WALLET'] ?? '';
+    $signature = $_SERVER['HTTP_X_NWO_SIGNATURE'] ?? '';
+    
+    $auth = new Web3Auth($db);
+    $result = $auth->authenticate($wallet, $signature, $data['message'] ?? '');
+    
+    if ($result['success']) {
+        echo json_encode([
+            'token' => $result['token'],
+            'wallet' => $wallet,
+            'expires' => $result['expires']
+        ]);
+    } else {
+        http_response_code(401);
+        echo json_encode(['error' => $result['error']]);
+    }
+}
+
+function handleSignals($method, $action, $id, $db, $redis) {
+    $analyzer = new SignalAnalyzer($db, $redis);
+    
+    switch ($method) {
+        case 'GET':
+            if ($id) {
+                // Get specific signal
+                $signal = $analyzer->getSignal($id);
+                echo json_encode($signal);
+            } else {
+                // List signals with filters
                 $filters = [
-                    'frequency_min' => $_GET['freq_min'] ?? null,
-                    'frequency_max' => $_GET['freq_max'] ?? null,
+                    'freq_min' => $_GET['freq_min'] ?? null,
+                    'freq_max' => $_GET['freq_max'] ?? null,
                     'modulation' => $_GET['modulation'] ?? null,
-                    'agent' => $_GET['agent'] ?? null,
-                    'since' => $_GET['since'] ?? null,
-                    'limit' => intval($_GET['limit'] ?? 50)
+                    'classification' => $_GET['classification'] ?? null,
+                    'limit' => min(100, intval($_GET['limit'] ?? 50)),
+                    'offset' => intval($_GET['offset'] ?? 0)
                 ];
                 
                 $signals = $analyzer->getSignals($filters);
-                
-                $response = [
-                    'status' => 'success',
-                    'count' => count($signals),
-                    'signals' => $signals
-                ];
-                $code = 200;
+                echo json_encode([
+                    'signals' => $signals,
+                    'total' => $analyzer->getTotalCount($filters),
+                    'limit' => $filters['limit'],
+                    'offset' => $filters['offset']
+                ]);
             }
             break;
-
-        case '/api/v1/signals/' . (preg_match('/^\/api\/v1\/signals\/(.+)$/', $path, $matches) ? $matches[1] : ''):
-            if ($method === 'GET' && isset($matches[1])) {
-                $signalId = $matches[1];
-                $signal = $analyzer->getSignal($signalId);
-                
-                if ($signal) {
-                    $response = ['status' => 'success', 'signal' => $signal];
-                    $code = 200;
-                } else {
-                    $response = ['status' => 'error', 'message' => 'Signal not found'];
-                    $code = 404;
-                }
+            
+        case 'POST':
+            // Submit new signal
+            $data = json_decode(file_get_contents('php://input'), true);
+            $signalId = $analyzer->submitSignal($data);
+            
+            // Broadcast to WebSocket subscribers
+            $redis->publish('signals', json_encode([
+                'type' => 'new_signal',
+                'id' => $signalId,
+                'data' => $data
+            ]));
+            
+            http_response_code(201);
+            echo json_encode(['id' => $signalId, 'status' => 'submitted']);
+            break;
+            
+        case 'PUT':
+            // Update signal classification
+            if (!$id) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Signal ID required']);
+                return;
             }
+            
+            $data = json_decode(file_get_contents('php://input'), true);
+            $analyzer->updateClassification($id, $data);
+            echo json_encode(['status' => 'updated']);
             break;
-
-        case '/api/v1/decode':
-            if ($method === 'POST') {
-                $signalId = $input['signal_id'] ?? null;
-                $mode = $input['mode'] ?? 'auto';
-                
-                if (!$signalId) {
-                    $response = ['status' => 'error', 'message' => 'Signal ID required'];
-                    $code = 400;
-                } else {
-                    $decoded = $analyzer->decodeSignal($signalId, $mode);
-                    
-                    $response = [
-                        'status' => 'success',
-                        'signal_id' => $signalId,
-                        'decoded' => $decoded
-                    ];
-                    $code = 200;
-                }
-            }
-            break;
-
-        // Agent Coordination Endpoints
-        case '/api/v1/share':
-            if ($method === 'POST') {
-                // Verify authentication for sharing
-                if (!$wallet || !$auth->verify($wallet, $signature)) {
-                    $response = ['status' => 'error', 'message' => 'Authentication required'];
-                    $code = 401;
-                } else {
-                    $signalData = $input['signal'] ?? null;
-                    
-                    if (!$signalData) {
-                        $response = ['status' => 'error', 'message' => 'Signal data required'];
-                        $code = 400;
-                    } else {
-                        $sharedId = $network->shareSignal($wallet, $signalData);
-                        
-                        $response = [
-                            'status' => 'success',
-                            'shared_id' => $sharedId,
-                            'message' => 'Signal shared with network'
-                        ];
-                        $code = 200;
-                    }
-                }
-            }
-            break;
-
-        case '/api/v1/network/signals':
-            if ($method === 'GET') {
-                $filters = [
-                    'frequency_min' => $_GET['freq_min'] ?? null,
-                    'frequency_max' => $_GET['freq_max'] ?? null,
-                    'modulation' => $_GET['modulation'] ?? null,
-                    'classification' => $_GET['classification'] ?? null,
-                    'limit' => intval($_GET['limit'] ?? 100)
-                ];
-                
-                $signals = $network->getNetworkSignals($filters);
-                
-                $response = [
-                    'status' => 'success',
-                    'count' => count($signals),
-                    'signals' => $signals
-                ];
-                $code = 200;
-            }
-            break;
-
-        case '/api/v1/consensus':
-            if ($method === 'POST') {
-                if (!$wallet) {
-                    $response = ['status' => 'error', 'message' => 'Wallet address required'];
-                    $code = 401;
-                } else {
-                    $signalId = $input['signal_id'] ?? null;
-                    $classification = $input['classification'] ?? null;
-                    $confidence = $input['confidence'] ?? 0.5;
-                    
-                    if (!$signalId || !$classification) {
-                        $response = ['status' => 'error', 'message' => 'Signal ID and classification required'];
-                        $code = 400;
-                    } else {
-                        $consensus = $network->submitVote($wallet, $signalId, $classification, $confidence);
-                        
-                        $response = [
-                            'status' => 'success',
-                            'consensus' => $consensus,
-                            'message' => 'Vote submitted'
-                        ];
-                        $code = 200;
-                    }
-                }
-            }
-            break;
-
-        // Device Management Endpoints
-        case '/api/v1/devices':
-            if ($method === 'GET') {
-                $devices = $analyzer->listDevices();
-                
-                $response = [
-                    'status' => 'success',
-                    'count' => count($devices),
-                    'devices' => $devices
-                ];
-                $code = 200;
-            }
-            break;
-
-        case '/api/v1/devices/' . (preg_match('/^\/api\/v1\/devices\/(.+)\/configure$/', $path, $matches) ? $matches[1] : ''):
-            if ($method === 'POST' && isset($matches[1])) {
-                $deviceId = $matches[1];
-                $config = $input['config'] ?? [];
-                
-                $success = $analyzer->configureDevice($deviceId, $config);
-                
-                if ($success) {
-                    $response = ['status' => 'success', 'message' => 'Device configured'];
-                    $code = 200;
-                } else {
-                    $response = ['status' => 'error', 'message' => 'Configuration failed'];
-                    $code = 400;
-                }
-            }
-            break;
-
-        case '/api/v1/devices/' . (preg_match('/^\/api\/v1\/devices\/(.+)\/status$/', $path, $matches) ? $matches[1] : ''):
-            if ($method === 'GET' && isset($matches[1])) {
-                $deviceId = $matches[1];
-                $status = $analyzer->getDeviceStatus($deviceId);
-                
-                if ($status) {
-                    $response = ['status' => 'success', 'device_status' => $status];
-                    $code = 200;
-                } else {
-                    $response = ['status' => 'error', 'message' => 'Device not found'];
-                    $code = 404;
-                }
-            }
-            break;
-
-        // Health Check
-        case '/api/v1/health':
-            $response = [
-                'status' => 'success',
-                'service' => 'NWO Signal Spectrum API',
-                'version' => '1.0.0',
-                'timestamp' => date('c')
-            ];
-            $code = 200;
-            break;
-
-        default:
-            $response = ['status' => 'error', 'message' => 'Endpoint not found: ' . $path];
-            $code = 404;
     }
-} catch (Exception $e) {
-    $response = ['status' => 'error', 'message' => $e->getMessage()];
-    $code = 500;
 }
 
-http_response_code($code);
-echo json_encode($response, JSON_PRETTY_PRINT);
+function handleAgents($method, $action, $id, $db) {
+    $network = new AgentNetwork($db);
+    
+    switch ($method) {
+        case 'GET':
+            if ($action === 'online') {
+                $agents = $network->getOnlineAgents();
+                echo json_encode(['agents' => $agents]);
+            } else {
+                $agent = $network->getAgent($id);
+                echo json_encode($agent);
+            }
+            break;
+            
+        case 'POST':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $result = $network->registerAgent($data);
+            echo json_encode(['agent_id' => $result]);
+            break;
+    }
+}
+
+function handleNetwork($method, $action, $db) {
+    $network = new AgentNetwork($db);
+    
+    switch ($action) {
+        case 'join':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $result = $network->join($data['wallet']);
+            echo json_encode(['status' => $result ? 'joined' : 'failed']);
+            break;
+            
+        case 'tasks':
+            if ($method === 'GET') {
+                $tasks = $network->getTasks($_GET['status'] ?? null);
+                echo json_encode(['tasks' => $tasks]);
+            } else {
+                $data = json_decode(file_get_contents('php://input'), true);
+                $taskId = $network->submitTask($data);
+                echo json_encode(['task_id' => $taskId]);
+            }
+            break;
+            
+        case 'vote':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $result = $network->submitVote($data['task_id'], $data);
+            echo json_encode(['consensus' => $result]);
+            break;
+            
+        case 'consensus':
+            $taskId = $_GET['task_id'] ?? '';
+            $consensus = $network->getConsensus($taskId);
+            echo json_encode($consensus);
+            break;
+    }
+}
+
+// NEW: Apocalypse Indicators Handler
+function handleApocalypse($method, $action, $db) {
+    $indicators = new ApocalypseIndicators($db);
+    
+    switch ($action) {
+        case 'level':
+            // Get current apocalypse level
+            $level = $indicators->calculateApocalypseLevel();
+            echo json_encode($level);
+            break;
+            
+        case 'alerts':
+            // Get active alerts
+            $filters = [
+                'severity' => $_GET['severity'] ?? null,
+                'type' => $_GET['type'] ?? null,
+                'hours' => intval($_GET['hours'] ?? 24),
+                'limit' => min(100, intval($_GET['limit'] ?? 50))
+            ];
+            
+            $alerts = $indicators->getAlerts($filters);
+            echo json_encode([
+                'alerts' => $alerts,
+                'count' => count($alerts),
+                'filters' => $filters
+            ]);
+            break;
+            
+        case 'check':
+            // Run all checks (admin only)
+            $alerts = $indicators->runAllChecks();
+            echo json_encode([
+                'checks_run' => 6,
+                'alerts_found' => count($alerts),
+                'alerts' => $alerts
+            ]);
+            break;
+            
+        case 'aviation':
+            // Aviation anomaly check
+            $region = $_GET['region'] ?? null;
+            $anomaly = $indicators->detectAviationAnomaly($region);
+            echo json_encode($anomaly ?: ['status' => 'no_anomaly']);
+            break;
+            
+        case 'seismic':
+            // Seismic monitoring
+            $hours = intval($_GET['hours'] ?? 24);
+            $seismic = $indicators->detectSeismicAnomaly($hours);
+            echo json_encode($seismic ?: ['status' => 'no_anomaly']);
+            break;
+            
+        case 'solar':
+            // Solar activity
+            $solar = $indicators->detectSolarAnomaly();
+            echo json_encode($solar ?: ['status' => 'no_anomaly']);
+            break;
+            
+        case 'radiation':
+            // Radiation monitoring
+            $radiation = $indicators->detectRadiationAnomaly();
+            echo json_encode($radiation ?: ['status' => 'no_anomaly']);
+            break;
+            
+        case 'asteroid':
+            // Asteroid tracking
+            $days = intval($_GET['days'] ?? 7);
+            $asteroid = $indicators->detectAsteroidThreat($days);
+            echo json_encode($asteroid ?: ['status' => 'no_threat']);
+            break;
+            
+        case 'history':
+            // Apocalypse level history
+            $hours = intval($_GET['hours'] ?? 168); // 7 days default
+            $history = $indicators->getLevelHistory($hours);
+            echo json_encode([
+                'history' => $history,
+                'max_level' => max(array_column($history, 'level'))
+            ]);
+            break;
+            
+        default:
+            // Dashboard summary
+            $dashboard = [
+                'level' => $indicators->calculateApocalypseLevel(),
+                'active_alerts' => $indicators->getAlerts(['hours' => 24]),
+                'stats' => [
+                    'aviation_checks' => $indicators->getCheckCount('aviation'),
+                    'seismic_events' => $indicators->getCheckCount('seismic'),
+                    'solar_alerts' => $indicators->getCheckCount('solar'),
+                    'radiation_spikes' => $indicators->getCheckCount('radiation'),
+                    'asteroid_warnings' => $indicators->getCheckCount('asteroid')
+                ]
+            ];
+            echo json_encode($dashboard);
+    }
+}
+
+function handleSpectrum($method, $action, $db) {
+    $analyzer = new SignalAnalyzer($db);
+    
+    switch ($action) {
+        case 'analyze':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $result = $analyzer->analyzeSpectrum($data);
+            echo json_encode($result);
+            break;
+            
+        case 'share':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $shareId = $analyzer->shareSignal($data['signal_id']);
+            echo json_encode(['shared_id' => $shareId]);
+            break;
+            
+        case 'frequency-bands':
+            $bands = $analyzer->getFrequencyBands();
+            echo json_encode(['bands' => $bands]);
+            break;
+    }
+}
+
+function handleWsToken($method, $db) {
+    if ($method !== 'POST') {
+        http_response_code(405);
+        return;
+    }
+    
+    $wallet = $_SERVER['HTTP_X_NWO_WALLET'] ?? '';
+    
+    // Generate WebSocket auth token
+    $token = bin2hex(random_bytes(32));
+    $expires = time() + 3600; // 1 hour
+    
+    $stmt = $db->prepare("
+        INSERT INTO ws_tokens (token, wallet, expires_at)
+        VALUES (?, ?, FROM_UNIXTIME(?))
+    ");
+    $stmt->execute([$token, $wallet, $expires]);
+    
+    echo json_encode([
+        'token' => $token,
+        'expires' => $expires,
+        'ws_url' => 'wss://nwo.capital/ws/spectrum'
+    ]);
+}
+
+// Helper functions
+
+function checkDatabase($db) {
+    try {
+        $db->query('SELECT 1');
+        return 'up';
+    } catch (Exception $e) {
+        return 'down';
+    }
+}
+
+function checkRedis($redis) {
+    try {
+        return $redis->ping() ? 'up' : 'down';
+    } catch (Exception $e) {
+        return 'down';
+    }
+}
+
+function getSignalCount($db, $hours) {
+    $stmt = $db->prepare("
+        SELECT COUNT(*) FROM signals 
+        WHERE created_at > DATE_SUB(NOW(), INTERVAL ? HOUR)
+    ");
+    $stmt->execute([$hours]);
+    return $stmt->fetchColumn();
+}
+
+function getAgentCount($db) {
+    $stmt = $db->query("
+        SELECT COUNT(*) FROM agents 
+        WHERE last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+    ");
+    return $stmt->fetchColumn();
+}
+
+function getCurrentApocalypseLevel($db) {
+    $stmt = $db->query("
+        SELECT level FROM apocalypse_level_history 
+        ORDER BY recorded_at DESC LIMIT 1
+    ");
+    $result = $stmt->fetch();
+    return $result ? intval($result['level']) : 1;
+}
