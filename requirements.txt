@@ -1,0 +1,23 @@
+# Web framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+
+# Config & validation
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# Database — direct asyncpg to Supabase Postgres (use Supavisor pooler URL)
+asyncpg==0.29.0
+
+# Redis (async)
+redis==5.1.1
+
+# HTTP client (replaces Guzzle for Osiris + external APIs)
+httpx==0.27.2
+
+# Web3 — wallet signature verification (mirrors ethers.verifyMessage on the client)
+eth-account==0.13.4
+eth-utils==5.0.0
+
+# Logging
+python-json-logger==2.0.7

@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: nwo-signal-spectrum
+    runtime: python
+    plan: starter
+    region: frankfurt
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2 --proxy-headers --forwarded-allow-ips='*'
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.4
+      # Pull the rest from Render dashboard (never commit secrets):
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OSIRIS_API_URL
+        sync: false
+      - key: OSIRIS_API_KEY
+        sync: false
+      - key: NASA_API_KEY
+        sync: false
+      - key: ADSBEXCHANGE_API_KEY
+        sync: false
+      - key: NWO_AUTH_DOMAIN
+        value: nwo.capital
+      - key: CORS_ORIGINS
+        value: https://nwo.capital
+      - key: APP_VERSION
+        value: 2.0.0
+      - key: LOG_LEVEL
+        value: INFO
