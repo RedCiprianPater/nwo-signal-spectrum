@@ -1,7 +1,9 @@
-"""/api/v1/agents — list online agents, register a new agent."""
-from __future__ import annotations
+"""/api/v1/agents — list online agents, register a new agent.
 
-from datetime import datetime, timezone
+Agents now FK into public.identities. Registration is upsert-by-identity rather
+than upsert-by-wallet — one identity can have exactly one agent profile.
+"""
+from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
@@ -13,8 +15,6 @@ from app.redis_client import broadcast
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
-ONLINE_WINDOW_SECONDS = 300  # last 5 minutes
-
 
 @router.get("", response_model=list[AgentRecord])
 async def list_agents(
@@ -24,7 +24,7 @@ async def list_agents(
     region: str | None = None,
     limit: int = Query(100, ge=1, le=500),
 ) -> list[AgentRecord]:
-    clauses = []
+    clauses: list[str] = []
     params: list = []
     if online_only:
         clauses.append("last_seen > NOW() - INTERVAL '5 minutes'")
@@ -36,7 +36,7 @@ async def list_agents(
     params.append(limit)
     rows = await conn.fetch(
         f"""
-        SELECT id, wallet, capabilities, region, last_seen,
+        SELECT id, identity_id::text, wallet, capabilities, region, last_seen,
                (last_seen > NOW() - INTERVAL '5 minutes') AS online
         FROM agents
         {where}
@@ -58,15 +58,17 @@ async def register_agent(
 
     row = await conn.fetchrow(
         """
-        INSERT INTO agents (wallet, capabilities, region, last_seen)
-        VALUES ($1, $2, $3, NOW())
-        ON CONFLICT (wallet) DO UPDATE
+        INSERT INTO agents (identity_id, wallet, capabilities, region, last_seen)
+        VALUES ($1::uuid, $2, $3, $4, NOW())
+        ON CONFLICT (identity_id) DO UPDATE
           SET capabilities = EXCLUDED.capabilities,
               region       = EXCLUDED.region,
+              wallet       = EXCLUDED.wallet,
               last_seen    = NOW()
-        RETURNING id, wallet, capabilities, region, last_seen,
+        RETURNING id, identity_id::text, wallet, capabilities, region, last_seen,
                   (last_seen > NOW() - INTERVAL '5 minutes') AS online
         """,
+        session.identity_id,
         session.wallet,
         body.capabilities,
         body.region,
@@ -80,6 +82,7 @@ async def register_agent(
 async def heartbeat(conn: DbConn, session: AuthSession) -> Response:
     """Bump last_seen. Agents call this every ~60s to stay 'online'."""
     await conn.execute(
-        "UPDATE agents SET last_seen = NOW() WHERE wallet = $1", session.wallet
+        "UPDATE agents SET last_seen = NOW() WHERE identity_id = $1::uuid",
+        session.identity_id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

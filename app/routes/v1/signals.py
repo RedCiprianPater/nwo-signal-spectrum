@@ -1,8 +1,4 @@
-"""/api/v1/signals — GET/POST/PUT signals + Redis broadcast.
-
-Direct port of the PHP handleSignals(). Behaviour matches what the React
-frontend expects: list with filters, single fetch, create, update.
-"""
+"""/api/v1/signals — GET/POST/PUT signals + Redis broadcast."""
 from __future__ import annotations
 
 import json
@@ -21,6 +17,9 @@ def _row_to_record(r) -> dict[str, Any]:
     d = dict(r)
     if d.get("metadata") and isinstance(d["metadata"], str):
         d["metadata"] = json.loads(d["metadata"])
+    # asyncpg returns UUID as uuid.UUID — coerce to str for pydantic
+    if d.get("submitter_identity_id") is not None:
+        d["submitter_identity_id"] = str(d["submitter_identity_id"])
     return d
 
 
@@ -34,7 +33,7 @@ async def list_signals(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> list[SignalRecord]:
-    clauses = []
+    clauses: list[str] = []
     params: list[Any] = []
     if freq_min is not None:
         params.append(freq_min)
@@ -51,7 +50,9 @@ async def list_signals(
     rows = await conn.fetch(
         f"""
         SELECT id, frequency_hz, bandwidth_hz, modulation, signal_strength_dbm,
-               classification, latitude, longitude, submitter_wallet, metadata, created_at
+               classification, latitude, longitude,
+               submitter_identity_id, submitter_wallet,
+               metadata, created_at
         FROM signals
         {where}
         ORDER BY created_at DESC
@@ -67,7 +68,9 @@ async def get_signal(signal_id: int, conn: DbConn, session: AuthSession) -> Sign
     row = await conn.fetchrow(
         """
         SELECT id, frequency_hz, bandwidth_hz, modulation, signal_strength_dbm,
-               classification, latitude, longitude, submitter_wallet, metadata, created_at
+               classification, latitude, longitude,
+               submitter_identity_id, submitter_wallet,
+               metadata, created_at
         FROM signals WHERE id = $1
         """,
         signal_id,
@@ -87,10 +90,13 @@ async def create_signal(
         """
         INSERT INTO signals (
             frequency_hz, bandwidth_hz, modulation, signal_strength_dbm,
-            classification, latitude, longitude, submitter_wallet, metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+            classification, latitude, longitude,
+            submitter_identity_id, submitter_wallet, metadata
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::uuid, $9, $10::jsonb)
         RETURNING id, frequency_hz, bandwidth_hz, modulation, signal_strength_dbm,
-                  classification, latitude, longitude, submitter_wallet, metadata, created_at
+                  classification, latitude, longitude,
+                  submitter_identity_id, submitter_wallet,
+                  metadata, created_at
         """,
         body.frequency_hz,
         body.bandwidth_hz,
@@ -99,11 +105,11 @@ async def create_signal(
         body.classification,
         lat,
         lon,
+        session.identity_id,
         session.wallet,
         json.dumps(body.metadata or {}),
     )
     record = SignalRecord(**_row_to_record(row))
-
     await broadcast("signals:new", record.model_dump(mode="json"))
     return record
 
@@ -112,7 +118,6 @@ async def create_signal(
 async def update_signal(
     signal_id: int, body: SignalUpdate, conn: DbConn, session: AuthSession
 ) -> SignalRecord:
-    # Build a dynamic UPDATE — only set fields that were provided.
     updates: list[str] = []
     params: list[Any] = []
     for field in ("modulation", "signal_strength_dbm", "classification"):
@@ -132,13 +137,14 @@ async def update_signal(
         UPDATE signals SET {", ".join(updates)}
         WHERE id = ${len(params)}
         RETURNING id, frequency_hz, bandwidth_hz, modulation, signal_strength_dbm,
-                  classification, latitude, longitude, submitter_wallet, metadata, created_at
+                  classification, latitude, longitude,
+                  submitter_identity_id, submitter_wallet,
+                  metadata, created_at
         """,
         *params,
     )
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="signal not found")
     record = SignalRecord(**_row_to_record(row))
-
     await broadcast("signals:update", record.model_dump(mode="json"))
     return record

@@ -1,12 +1,16 @@
-"""/api/v1/network — agent network coordination."""
+"""/api/v1/network — agent network coordination.
+
+Tasks and votes now reference public.identities directly. One vote per
+identity per task (was: one per wallet — same outcome in practice but the
+constraint is now expressed in terms of the canonical identity).
+"""
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 
-from app.config import get_settings
 from app.deps import AuthSession, DbConn
 from app.models import TaskSubmit, VoteSubmit
 from app.redis_client import broadcast
@@ -18,16 +22,22 @@ CONSENSUS_THRESHOLD = 0.67  # 2/3 majority
 
 @router.post("/join", status_code=status.HTTP_201_CREATED)
 async def join_network(conn: DbConn, session: AuthSession) -> dict[str, Any]:
-    """Mark this wallet as a network participant. Idempotent."""
     await conn.execute(
         """
-        INSERT INTO network_members (wallet, joined_at)
-        VALUES ($1, NOW())
-        ON CONFLICT (wallet) DO UPDATE SET last_active = NOW()
+        INSERT INTO network_members (identity_id, wallet, joined_at, last_active)
+        VALUES ($1::uuid, $2, NOW(), NOW())
+        ON CONFLICT (identity_id) DO UPDATE
+          SET last_active = NOW(),
+              wallet      = EXCLUDED.wallet
         """,
+        session.identity_id,
         session.wallet,
     )
-    return {"wallet": session.wallet, "status": "joined"}
+    return {
+        "wallet": session.wallet,
+        "identity_id": session.identity_id,
+        "status": "joined",
+    }
 
 
 @router.get("/tasks")
@@ -41,7 +51,8 @@ async def list_tasks(
     rows = await conn.fetch(
         f"""
         SELECT id, type, signal_id, proposed_class, evidence, payload,
-               submitter_wallet, created_at, resolved_at, consensus_result
+               submitter_identity_id::text, submitter_wallet,
+               created_at, resolved_at, consensus_result
         FROM consensus_tasks
         {where}
         ORDER BY created_at DESC
@@ -49,7 +60,7 @@ async def list_tasks(
         """,
         limit,
     )
-    out = []
+    out: list[dict[str, Any]] = []
     for r in rows:
         d = dict(r)
         for f in ("evidence", "payload", "consensus_result"):
@@ -66,8 +77,9 @@ async def submit_task(
     row = await conn.fetchrow(
         """
         INSERT INTO consensus_tasks (
-            type, signal_id, proposed_class, evidence, payload, submitter_wallet
-        ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6)
+            type, signal_id, proposed_class, evidence, payload,
+            submitter_identity_id, submitter_wallet
+        ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::uuid, $7)
         RETURNING id, created_at
         """,
         body.type,
@@ -75,6 +87,7 @@ async def submit_task(
         body.proposed_class,
         json.dumps(body.evidence),
         json.dumps(body.payload or {}),
+        session.identity_id,
         session.wallet,
     )
     task = {
@@ -83,6 +96,7 @@ async def submit_task(
         "signal_id": body.signal_id,
         "proposed_class": body.proposed_class,
         "submitter_wallet": session.wallet,
+        "submitter_identity_id": session.identity_id,
         "created_at": row["created_at"],
     }
     await broadcast("consensus:tasks", task)
@@ -91,18 +105,21 @@ async def submit_task(
 
 @router.post("/vote")
 async def vote(body: VoteSubmit, conn: DbConn, session: AuthSession) -> dict[str, Any]:
-    # One vote per wallet per task.
     await conn.execute(
         """
-        INSERT INTO consensus_votes (task_id, voter_wallet, classification, confidence, notes)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (task_id, voter_wallet) DO UPDATE
+        INSERT INTO consensus_votes (
+            task_id, voter_identity_id, voter_wallet, classification, confidence, notes
+        )
+        VALUES ($1, $2::uuid, $3, $4, $5, $6)
+        ON CONFLICT (task_id, voter_identity_id) DO UPDATE
           SET classification = EXCLUDED.classification,
               confidence     = EXCLUDED.confidence,
               notes          = EXCLUDED.notes,
+              voter_wallet   = EXCLUDED.voter_wallet,
               cast_at        = NOW()
         """,
         body.task_id,
+        session.identity_id,
         session.wallet,
         body.classification,
         body.confidence,
@@ -110,10 +127,14 @@ async def vote(body: VoteSubmit, conn: DbConn, session: AuthSession) -> dict[str
     )
     await broadcast(
         "consensus:vote",
-        {"task_id": body.task_id, "voter": session.wallet, "classification": body.classification},
+        {
+            "task_id": body.task_id,
+            "voter": session.wallet,
+            "voter_identity_id": session.identity_id,
+            "classification": body.classification,
+        },
     )
 
-    # Re-evaluate consensus after every vote.
     result = await _evaluate_consensus(conn, body.task_id)
     return {"task_id": body.task_id, "vote": "recorded", "consensus": result}
 
@@ -124,13 +145,9 @@ async def get_consensus(task_id: int, conn: DbConn, session: AuthSession) -> dic
 
 
 async def _evaluate_consensus(conn, task_id: int) -> dict[str, Any]:
-    """Tally weighted votes; if any classification crosses the threshold, mark task resolved."""
+    """Tally weighted votes; resolve task if any class crosses the threshold."""
     rows = await conn.fetch(
-        """
-        SELECT classification, confidence
-        FROM consensus_votes
-        WHERE task_id = $1
-        """,
+        "SELECT classification, confidence FROM consensus_votes WHERE task_id = $1",
         task_id,
     )
     if not rows:
