@@ -1,9 +1,10 @@
 <?php
 /**
- * NWO Signal Spectrum - API Router v2.0
+ * NWO Signal Spectrum - Complete API Router v2.1
  * 
  * Main entry point for all API endpoints
- * Includes RF signal analysis, agent network, and apocalypse indicators
+ * Includes RF signal analysis, agent network, apocalypse indicators
+ * AND Osiris integration (v2 API)
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
@@ -17,7 +18,7 @@ use NWOSignalSpectrum\ApocalypseIndicators;
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, X-NWO-Wallet, X-NWO-Signature');
+header('Access-Control-Allow-Headers: Content-Type, X-NWO-Wallet, X-NWO-Signature, Authorization');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -41,15 +42,64 @@ $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];
 $pathParts = explode('/', trim($path, '/'));
 
-// Remove 'api' and 'v1' from path
+// Remove 'api' from path
 if ($pathParts[0] === 'api') array_shift($pathParts);
-if ($pathParts[0] === 'v1') array_shift($pathParts);
+
+// Check for v1 or v2
+$apiVersion = $pathParts[0] ?? 'v1';
+if (in_array($pathParts[0], ['v1', 'v2'])) {
+    array_shift($pathParts);
+}
 
 $endpoint = $pathParts[0] ?? '';
 $action = $pathParts[1] ?? '';
 $id = $pathParts[2] ?? null;
 
 try {
+    // Route to v2 handlers if version 2
+    if ($apiVersion === 'v2') {
+        handleV2Routes($method, $endpoint, $action, $id, $db, $redis);
+    } else {
+        // v1 routes (existing)
+        handleV1Routes($method, $endpoint, $action, $id, $db, $redis);
+    }
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['error' => $e->getMessage()]);
+}
+
+// V2 Route Handler (NEW - Osiris Integration)
+function handleV2Routes($method, $endpoint, $action, $id, $db, $redis) {
+    switch ($endpoint) {
+        // Unified Intelligence (NEW)
+        case 'intelligence':
+            require_once __DIR__ . '/v2/intelligence.php';
+            break;
+            
+        // Unified Threats (NEW)
+        case 'threats':
+            require_once __DIR__ . '/v2/threats.php';
+            break;
+            
+        // Cross-Platform Consensus (NEW)
+        case 'agents':
+        case 'consensus':
+            require_once __DIR__ . '/v2/consensus.php';
+            break;
+            
+        // Enhanced Apocalypse with Osiris data
+        case 'apocalypse':
+            handleV2Apocalypse($method, $action, $db);
+            break;
+            
+        // Fallback to v1 for non-overridden endpoints
+        default:
+            handleV1Routes($method, $endpoint, $action, $id, $db, $redis);
+    }
+}
+
+// V1 Route Handler (EXISTING - with your custom implementations)
+function handleV1Routes($method, $endpoint, $action, $id, $db, $redis) {
     switch ($endpoint) {
         // Health check
         case 'health':
@@ -75,7 +125,7 @@ try {
             handleNetwork($method, $action, $db);
             break;
             
-        // Apocalypse Indicators (NEW)
+        // Apocalypse Indicators
         case 'apocalypse':
             handleApocalypse($method, $action, $db);
             break;
@@ -92,19 +142,60 @@ try {
             
         default:
             http_response_code(404);
-            echo json_encode(['error' => 'Endpoint not found']);
+            echo json_encode(['error' => 'Endpoint not found', 'version' => 'v1']);
     }
-} catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
 }
 
-// Handler Functions
+// V2 Apocalypse Handler (Enhanced with Osiris data)
+function handleV2Apocalypse($method, $action, $db) {
+    require_once __DIR__ . '/../services/UnifiedIntelligence.php';
+    
+    $intel = new NWOSignalSpectrum\Services\UnifiedIntelligence();
+    
+    if ($method === 'GET' && $action === 'unified') {
+        // GET /api/v2/apocalypse/unified
+        $data = $intel->getAllIntelligence();
+        
+        echo json_encode([
+            'level' => $data['apocalypse_level'],
+            'description' => getApocalypseDescription($data['apocalypse_level']),
+            'active_signals' => $data['rf_signals']['count'] ?? 0,
+            'breakdown' => [
+                'aviation' => $data['flights']['anomalies'] ?? 0,
+                'seismic' => $data['earthquakes']['count'] ?? 0,
+                'solar' => $data['space']['alerts'] ?? 0,
+                'radiation' => 0,
+                'rf_anomaly' => $data['rf_signals']['anomalies'] ?? 0,
+                'cyber' => $data['cyber']['critical'] ?? 0,
+                'conflict' => $data['conflict']['active'] ?? 0
+            ],
+            'timestamp' => date('c')
+        ]);
+    } else {
+        // Fallback to v1 handler
+        handleApocalypse($method, $action, $db);
+    }
+}
+
+function getApocalypseDescription($level) {
+    $descriptions = [
+        0 => 'Normal - No significant threats detected',
+        1 => 'Elevated - Minor anomalies detected',
+        2 => 'Moderate - Multiple concerning signals',
+        3 => 'High - Significant threat activity',
+        4 => 'Critical - Severe threats imminent',
+        5 => 'Extinction - Catastrophic events in progress'
+    ];
+    return $descriptions[$level] ?? 'Unknown';
+}
+
+// Handler Functions (YOUR CUSTOM IMPLEMENTATIONS)
 
 function handleHealth($db, $redis) {
     $health = [
         'status' => 'healthy',
-        'version' => '2.0.0',
+        'version' => '2.1.0',
+        'api_versions' => ['v1', 'v2'],
         'timestamp' => time(),
         'services' => [
             'database' => checkDatabase($db),
@@ -120,6 +211,7 @@ function handleHealth($db, $redis) {
     echo json_encode($health);
 }
 
+// YOUR CUSTOM handleAuth
 function handleAuth($method, $db) {
     if ($method !== 'POST') {
         http_response_code(405);
@@ -146,6 +238,7 @@ function handleAuth($method, $db) {
     }
 }
 
+// YOUR CUSTOM handleSignals
 function handleSignals($method, $action, $id, $db, $redis) {
     $analyzer = new SignalAnalyzer($db, $redis);
     
@@ -207,6 +300,7 @@ function handleSignals($method, $action, $id, $db, $redis) {
     }
 }
 
+// YOUR CUSTOM handleAgents
 function handleAgents($method, $action, $id, $db) {
     $network = new AgentNetwork($db);
     
@@ -229,6 +323,7 @@ function handleAgents($method, $action, $id, $db) {
     }
 }
 
+// YOUR CUSTOM handleNetwork
 function handleNetwork($method, $action, $db) {
     $network = new AgentNetwork($db);
     
@@ -264,7 +359,7 @@ function handleNetwork($method, $action, $db) {
     }
 }
 
-// NEW: Apocalypse Indicators Handler
+// YOUR COMPLETE CUSTOM handleApocalypse
 function handleApocalypse($method, $action, $db) {
     $indicators = new ApocalypseIndicators($db);
     
@@ -362,6 +457,7 @@ function handleApocalypse($method, $action, $db) {
     }
 }
 
+// YOUR CUSTOM handleSpectrum
 function handleSpectrum($method, $action, $db) {
     $analyzer = new SignalAnalyzer($db);
     
@@ -385,6 +481,7 @@ function handleSpectrum($method, $action, $db) {
     }
 }
 
+// YOUR CUSTOM handleWsToken
 function handleWsToken($method, $db) {
     if ($method !== 'POST') {
         http_response_code(405);
@@ -410,7 +507,7 @@ function handleWsToken($method, $db) {
     ]);
 }
 
-// Helper functions
+// YOUR CUSTOM Helper functions
 
 function checkDatabase($db) {
     try {
