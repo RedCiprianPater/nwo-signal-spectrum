@@ -1,26 +1,27 @@
-"""Web3 authentication.
+"""Web3 authentication + identity resolution.
 
-Mirrors the SIWE-style flow used by the React frontend:
-  1. Client signs `{prefix}\n{domain}\n{nonce}\n{timestamp}` with ethers.signMessage()
-  2. Client POSTs to /api/v1/auth with headers X-NWO-Wallet, X-NWO-Signature and body { message, timestamp }
-  3. Server recovers the signing address with eth_account, compares to X-NWO-Wallet
-  4. On success, server issues a session token cached in Redis (1h TTL)
-  5. Subsequent requests use `Authorization: Bearer <token>`
+Auth flow (changes from v1):
+  1. Client signs canonical message with ethers.signMessage()
+  2. Server recovers address with eth_account → verified wallet
+  3. Server upserts into public.identities via spectrum.find_or_create_identity_for_wallet()
+  4. Session token stored in Redis carries BOTH wallet and identity_id (as JSON)
+  5. Subsequent requests resolve back to a Session with both fields
 
-Why a session token at all when the client could re-sign every request?
-  - MetaMask popup prompts are jarring; sessionStorage caches are routine.
-  - Keeps the server's hot path (one Redis GET) cheap.
+This makes signal-spectrum a first-class consumer of the platform's identity
+layer instead of a parallel system keyed on raw wallets.
 """
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 import time
 from dataclasses import dataclass
 
+import asyncpg
 from eth_account import Account
 from eth_account.messages import encode_defunct
-from eth_utils import is_checksum_address, to_checksum_address
+from eth_utils import to_checksum_address
 
 from app.config import get_settings
 from app.redis_client import get_redis
@@ -33,20 +34,19 @@ SESSION_KEY_PREFIX = "session:"
 
 @dataclass(frozen=True)
 class Session:
-    wallet: str  # checksum-cased
+    wallet: str         # checksum-cased EVM address
+    identity_id: str    # UUID from public.identities.id
     issued_at: int
 
 
 def _normalize_address(addr: str) -> str:
-    """Force checksum casing; raise ValueError if not a valid address."""
     if not addr:
         raise ValueError("empty address")
-    # eth_utils accepts any case; convert to canonical EIP-55.
     return to_checksum_address(addr)
 
 
 def verify_signature(wallet: str, message: str, signature: str) -> str:
-    """Recover address from a personal_sign signature and compare to claimed wallet.
+    """Recover address from a personal_sign signature, compare to claimed wallet.
 
     Returns the recovered (checksum) address on success.
     Raises ValueError on mismatch or malformed input.
@@ -55,16 +55,14 @@ def verify_signature(wallet: str, message: str, signature: str) -> str:
     encoded = encode_defunct(text=message)
     try:
         recovered = Account.recover_message(encoded, signature=signature)
-    except Exception as exc:  # bad signature format, etc.
+    except Exception as exc:
         raise ValueError(f"signature recovery failed: {exc}") from exc
-
     if to_checksum_address(recovered) != claimed:
         raise ValueError("signature does not match claimed wallet")
     return claimed
 
 
 def validate_timestamp(timestamp: int) -> None:
-    """Reject signed messages whose timestamp is outside the configured window."""
     settings = get_settings()
     now = int(time.time())
     if abs(now - int(timestamp)) > settings.nwo_auth_timestamp_window:
@@ -82,30 +80,53 @@ def build_canonical_message(nonce: str, timestamp: int) -> str:
     )
 
 
+# ----- Identity resolution -----
+
+async def resolve_identity(conn: asyncpg.Connection, wallet: str) -> str:
+    """Find-or-create the identity row for this wallet. Returns UUID as string.
+
+    Uses the spectrum.find_or_create_identity_for_wallet() SQL function so the
+    lookup-or-insert is atomic at the DB level (no race between two concurrent
+    first-signins for the same wallet).
+    """
+    row = await conn.fetchrow(
+        "SELECT spectrum.find_or_create_identity_for_wallet($1) AS id",
+        wallet,
+    )
+    if row is None or row["id"] is None:
+        raise RuntimeError("identity upsert returned no id")
+    return str(row["id"])
+
+
 # ----- Session token storage (Redis) -----
 
-async def issue_session(wallet: str) -> tuple[str, int]:
-    """Generate a random session token, store wallet binding in Redis. Returns (token, expires_at)."""
+async def issue_session(wallet: str, identity_id: str) -> tuple[str, int]:
+    """Generate a session token, store {wallet, identity_id} in Redis. Returns (token, expires_at)."""
     token = secrets.token_urlsafe(32)
     expires_at = int(time.time()) + SESSION_TTL_SECONDS
-    await get_redis().setex(
-        f"{SESSION_KEY_PREFIX}{token}",
-        SESSION_TTL_SECONDS,
-        _normalize_address(wallet),
-    )
+    payload = json.dumps({"wallet": _normalize_address(wallet), "identity_id": identity_id})
+    await get_redis().setex(f"{SESSION_KEY_PREFIX}{token}", SESSION_TTL_SECONDS, payload)
     return token, expires_at
 
 
 async def resolve_session(token: str) -> Session | None:
-    """Look up the wallet bound to a session token. None if absent/expired."""
+    """Look up the session bound to a token. None if absent/expired/malformed."""
     if not token:
         return None
-    wallet = await get_redis().get(f"{SESSION_KEY_PREFIX}{token}")
-    if not wallet:
+    raw = await get_redis().get(f"{SESSION_KEY_PREFIX}{token}")
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None  # legacy plain-wallet entries — force re-auth
+    wallet = data.get("wallet")
+    identity_id = data.get("identity_id")
+    if not wallet or not identity_id:
         return None
     ttl = await get_redis().ttl(f"{SESSION_KEY_PREFIX}{token}")
     issued_at = int(time.time()) - (SESSION_TTL_SECONDS - max(ttl, 0))
-    return Session(wallet=wallet, issued_at=issued_at)
+    return Session(wallet=wallet, identity_id=identity_id, issued_at=issued_at)
 
 
 async def revoke_session(token: str) -> None:

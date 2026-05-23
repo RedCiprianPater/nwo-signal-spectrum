@@ -1,9 +1,12 @@
 """asyncpg connection pool, wired for Supabase Supavisor (transaction pooler, port 6543).
 
-Why asyncpg and not supabase-py? asyncpg gives us:
-  - Direct SQL (mirrors what the PHP handlers were doing)
-  - Server-side prepared statements (must be disabled for transaction pooling — see below)
-  - Significantly lower latency than the PostgREST REST round-trip
+Two important Supavisor-specific settings:
+  - statement_cache_size=0   — transaction pooling can't reuse prepared statements
+                               across connections; setting this to 0 prevents
+                               "prepared statement does not exist" errors.
+  - init=_init_connection    — sets `search_path = spectrum, public` so unqualified
+                               table names in route handlers resolve to spectrum.*
+                               while cross-schema FKs into public.identities still work.
 """
 from __future__ import annotations
 
@@ -20,6 +23,11 @@ logger = logging.getLogger(__name__)
 _pool: asyncpg.Pool | None = None
 
 
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    """Run on every new pooled connection. Sets the schema search path."""
+    await conn.execute("SET search_path = spectrum, public")
+
+
 async def init_pool() -> asyncpg.Pool:
     """Initialize the global pool. Called once at app startup."""
     global _pool
@@ -27,8 +35,6 @@ async def init_pool() -> asyncpg.Pool:
         return _pool
 
     settings = get_settings()
-    # Supavisor transaction pooler does NOT support prepared statements.
-    # Setting statement_cache_size=0 is required, otherwise queries fail at random.
     _pool = await asyncpg.create_pool(
         dsn=settings.database_url,
         min_size=1,
@@ -36,8 +42,9 @@ async def init_pool() -> asyncpg.Pool:
         command_timeout=30,
         statement_cache_size=0,
         max_inactive_connection_lifetime=300,
+        init=_init_connection,
     )
-    logger.info("asyncpg pool ready (Supabase pooler)")
+    logger.info("asyncpg pool ready (Supabase pooler, search_path=spectrum,public)")
     return _pool
 
 
