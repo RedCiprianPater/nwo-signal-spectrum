@@ -17,6 +17,7 @@ class AuthRequest(BaseModel):
 
 class AuthResponse(BaseModel):
     wallet: str
+    identity_id: str
     token: str
     expires_at: int
 
@@ -56,6 +57,7 @@ class SignalRecord(BaseModel):
     classification: str
     latitude: float | None = None
     longitude: float | None = None
+    submitter_identity_id: str | None = None
     submitter_wallet: str | None = None
     metadata: dict[str, Any] | None = None
     created_at: datetime
@@ -70,6 +72,7 @@ class AgentRegister(BaseModel):
 
 class AgentRecord(BaseModel):
     id: int
+    identity_id: str
     wallet: str
     capabilities: list[str]
     region: str | None
