@@ -5,13 +5,14 @@ services:
     plan: starter
     region: frankfurt
     branch: main
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2 --proxy-headers --forwarded-allow-ips='*'
     healthCheckPath: /health
     envVars:
+      # Belt-and-suspenders: .python-version file ALSO pins this, but Render
+      # honors PYTHON_VERSION too. Both pinning mechanisms reinforce each other.
       - key: PYTHON_VERSION
-        value: 3.12.4
-      # Pull the rest from Render dashboard (never commit secrets):
+        value: 3.12.7
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
