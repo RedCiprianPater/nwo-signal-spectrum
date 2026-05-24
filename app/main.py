@@ -4,7 +4,7 @@ Run locally:
     uvicorn app.main:app --reload --port 8080
 
 On Render:
-    See render.yaml — `uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2`
+    See render.yaml — `uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1`
 """
 from __future__ import annotations
 
@@ -36,26 +36,76 @@ from app.services import osiris
 
 
 def _configure_logging() -> None:
+    """Configure root logger early so even startup failures are visible.
+
+    force=True is important — when uvicorn imports this module it may have
+    already attached a handler, and basicConfig is otherwise a no-op in that
+    case. Forcing reconfiguration makes our format apply consistently.
+    """
     settings = get_settings()
     logging.basicConfig(
         level=settings.log_level,
         format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+        force=True,
     )
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Startup/shutdown: build the pools, then tear them down cleanly."""
+    """Startup/shutdown: build the pools, then tear them down cleanly.
+
+    Wrapped in try/except so that any startup failure is logged with a full
+    traceback before the process exits. Without this, uvicorn can swallow the
+    error and exit with a bare status code (e.g. status 3) leaving no clue
+    in the Render log about what went wrong.
+    """
     _configure_logging()
-    await init_pool()
-    await init_redis()
-    await osiris.init_osiris()
+    log = logging.getLogger("app.startup")
+
+    log.info("lifespan: starting up")
+    try:
+        await init_pool()
+        log.info("lifespan: postgres pool ready")
+        await init_redis()
+        log.info("lifespan: redis ready")
+        await osiris.init_osiris()
+        log.info("lifespan: osiris client ready")
+        log.info("lifespan: startup complete")
+    except Exception:
+        log.exception("STARTUP FAILED — see traceback above")
+        # Best-effort cleanup of whatever did come up before the failure,
+        # so we don't leak connections on a partial start.
+        try:
+            await osiris.close_osiris()
+        except Exception:
+            pass
+        try:
+            await close_redis()
+        except Exception:
+            pass
+        try:
+            await close_pool()
+        except Exception:
+            pass
+        raise
+
     try:
         yield
     finally:
-        await osiris.close_osiris()
-        await close_redis()
-        await close_pool()
+        log.info("lifespan: shutting down")
+        try:
+            await osiris.close_osiris()
+        except Exception:
+            log.exception("error closing osiris")
+        try:
+            await close_redis()
+        except Exception:
+            log.exception("error closing redis")
+        try:
+            await close_pool()
+        except Exception:
+            log.exception("error closing pool")
+        log.info("lifespan: shutdown complete")
 
 
 settings = get_settings()
