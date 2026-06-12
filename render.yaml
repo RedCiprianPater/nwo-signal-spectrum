@@ -1,4 +1,7 @@
 services:
+  # ============================================================
+  # Web API — uvicorn FastAPI app
+  # ============================================================
   - type: web
     name: nwo-signal-spectrum
     runtime: python
@@ -29,9 +32,108 @@ services:
         sync: false
       - key: NWO_AUTH_DOMAIN
         value: nwo.capital
+      # ----------------------------------------------------------
+      # CORS — the apocalypse globe lives on a HuggingFace Space
+      # at https://cpater-nwo-apocalypse.hf.space. Including it
+      # here is required or every fetch from the globe will fail
+      # with a CORS error (manifests as "OFFLINE" + 0 entities).
+      # ----------------------------------------------------------
       - key: CORS_ORIGINS
-        value: https://nwo.capital
+        value: https://nwo.capital,https://cpater-nwo-apocalypse.hf.space,https://huggingface.co
       - key: APP_VERSION
-        value: 2.0.0
+        value: 2.1.0
       - key: LOG_LEVEL
         value: INFO
+      # ----------------------------------------------------------
+      # Optional ingester credentials (all open-data sources work
+      # without them, but auth lifts rate limits significantly).
+      # ----------------------------------------------------------
+      - key: OPENSKY_USERNAME
+        sync: false
+      - key: OPENSKY_PASSWORD
+        sync: false
+      - key: AISSTREAM_API_KEY
+        sync: false
+      # Shared secret the cron service uses to call the protected
+      # /api/v1/layers/refresh-due endpoint. Generate once:
+      #   openssl rand -base64 32
+      - key: INTERNAL_CRON_TOKEN
+        sync: false
+
+  # ============================================================
+  # Cron — refresh all realtime layers every 5 minutes
+  # ============================================================
+  # Hits the web service over the public URL with a shared bearer
+  # token. The /api/v1/layers/refresh-due endpoint iterates over
+  # layers whose `last_run_at + refresh_minutes < now()` and runs
+  # the corresponding ingester (satellites, flights, weather,
+  # ocean, atmosphere, geology, ships).
+  #
+  # Render cron services run a one-shot command on the schedule
+  # and exit; there is no long-running process to drain memory.
+  # ============================================================
+  - type: cron
+    name: nwo-spectrum-refresh-due
+    runtime: python
+    plan: starter
+    region: frankfurt
+    branch: main
+    schedule: "*/5 * * * *"
+    buildCommand: pip install --upgrade pip httpx
+    startCommand: |
+      python -c "
+      import os, sys, httpx
+      url = os.environ['SERVICE_URL'].rstrip('/') + '/api/v1/layers/refresh-due'
+      token = os.environ['INTERNAL_CRON_TOKEN']
+      r = httpx.post(url, headers={'Authorization': f'Bearer {token}'}, timeout=300)
+      print(r.status_code, r.text[:500])
+      r.raise_for_status()
+      "
+    envVars:
+      - key: SERVICE_URL
+        value: https://nwo-signal-spectrum.onrender.com
+      - key: INTERNAL_CRON_TOKEN
+        sync: false
+
+  # ============================================================
+  # Cron — daily bootstrap of OSM-backed layers for priority
+  # countries (military bases, hospitals, embassies, etc.)
+  # ============================================================
+  # OSM data is static enough that we only need to pull it once
+  # per country per day. Adjust the country list to your priorities.
+  # ============================================================
+  - type: cron
+    name: nwo-spectrum-bootstrap-countries
+    runtime: python
+    plan: starter
+    region: frankfurt
+    branch: main
+    schedule: "30 3 * * *"   # 03:30 UTC daily
+    buildCommand: pip install --upgrade pip httpx
+    startCommand: |
+      python -c "
+      import os, httpx
+      url_base = os.environ['SERVICE_URL'].rstrip('/') + '/api/v1/layers/bootstrap-country'
+      token = os.environ['INTERNAL_CRON_TOKEN']
+      countries = os.environ.get('BOOTSTRAP_COUNTRIES', 'NO,SE,DK,FI,IS,GB,DE,FR,NL,US,CA,JP,KR,AU').split(',')
+      for iso2 in countries:
+          iso2 = iso2.strip().upper()
+          if not iso2:
+              continue
+          print(f'bootstrapping {iso2}...')
+          try:
+              r = httpx.post(url_base,
+                  headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+                  json={'iso2': iso2},
+                  timeout=900)
+              print(' ->', r.status_code, r.text[:200])
+          except Exception as e:
+              print(' ->', repr(e))
+      "
+    envVars:
+      - key: SERVICE_URL
+        value: https://nwo-signal-spectrum.onrender.com
+      - key: INTERNAL_CRON_TOKEN
+        sync: false
+      - key: BOOTSTRAP_COUNTRIES
+        value: NO,SE,DK,FI,IS,GB,DE,FR,NL,US,CA,JP,KR,AU
