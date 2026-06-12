@@ -5,6 +5,11 @@ Run locally:
 
 On Render:
     See render.yaml — `uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1`
+
+The global_layers router import is wrapped in try/except so the app boots
+even if `app/routes/v1/global_layers.py` isn't present in the repo yet. A
+warning is logged at startup; everything else (auth, signals, agents,
+apocalypse, etc.) continues to work normally.
 """
 from __future__ import annotations
 
@@ -24,7 +29,6 @@ from app.redis_client import close_redis, init_redis
 from app.routes.v1 import agents as v1_agents
 from app.routes.v1 import apocalypse as v1_apocalypse
 from app.routes.v1 import auth as v1_auth
-from app.routes.v1 import global_layers as v1_layers  # NEW — GeoLibre layers
 from app.routes.v1 import network as v1_network
 from app.routes.v1 import signals as v1_signals
 from app.routes.v1 import spectrum as v1_spectrum
@@ -35,14 +39,30 @@ from app.routes.v2 import intelligence as v2_intelligence
 from app.routes.v2 import threats as v2_threats
 from app.services import osiris
 
+# ----- Optional: global_layers router (GeoLibre integration) -----
+# Wrapped so a missing or broken global_layers module never blocks the
+# whole app from booting. If you see the warning at startup, the file
+# isn't in the repo at app/routes/v1/global_layers.py yet — add it
+# (no further changes here are required, this import will succeed silently
+#  on the next deploy).
+_log_boot = logging.getLogger("app.boot")
+try:
+    from app.routes.v1 import global_layers as v1_layers  # noqa: E402
+    _HAS_LAYERS = True
+    _log_boot.info("global_layers router loaded OK")
+except Exception as _layers_e:  # ImportError or any side-effect failure
+    v1_layers = None  # type: ignore
+    _HAS_LAYERS = False
+    _log_boot.warning(
+        "global_layers router NOT loaded (%s) — "
+        "/api/v1/layers/* will be unavailable until "
+        "app/routes/v1/global_layers.py is added to the repo",
+        _layers_e,
+    )
+
 
 def _configure_logging() -> None:
-    """Configure root logger early so even startup failures are visible.
-
-    force=True is important — when uvicorn imports this module it may have
-    already attached a handler, and basicConfig is otherwise a no-op in that
-    case. Forcing reconfiguration makes our format apply consistently.
-    """
+    """Configure root logger early so even startup failures are visible."""
     settings = get_settings()
     logging.basicConfig(
         level=settings.log_level,
@@ -53,17 +73,13 @@ def _configure_logging() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Startup/shutdown: build the pools, then tear them down cleanly.
-
-    Wrapped in try/except so that any startup failure is logged with a full
-    traceback before the process exits. Without this, uvicorn can swallow the
-    error and exit with a bare status code (e.g. status 3) leaving no clue
-    in the Render log about what went wrong.
-    """
+    """Startup/shutdown: build the pools, then tear them down cleanly."""
     _configure_logging()
     log = logging.getLogger("app.startup")
 
     log.info("lifespan: starting up")
+    if not _HAS_LAYERS:
+        log.warning("lifespan: global_layers router missing — layers API disabled")
     try:
         await init_pool()
         log.info("lifespan: postgres pool ready")
@@ -74,8 +90,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         log.info("lifespan: startup complete")
     except Exception:
         log.exception("STARTUP FAILED — see traceback above")
-        # Best-effort cleanup of whatever did come up before the failure,
-        # so we don't leak connections on a partial start.
         try:
             await osiris.close_osiris()
         except Exception:
@@ -124,7 +138,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["X-Request-Id"],
 )
@@ -157,6 +171,7 @@ async def health() -> dict:
         "services": {
             "database": "up" if db_ok else "down",
             "redis": "up" if redis_ok else "down",
+            "layers_router": "up" if _HAS_LAYERS else "missing",
         },
         "timestamp": int(time.time()),
     }
@@ -180,7 +195,8 @@ app.include_router(v1_agents.router,      prefix=V1)
 app.include_router(v1_network.router,     prefix=V1)
 app.include_router(v1_apocalypse.router,  prefix=V1)
 app.include_router(v1_spectrum.router,    prefix=V1)
-app.include_router(v1_layers.router,      prefix=V1)   # NEW — /api/v1/layers/*
+if _HAS_LAYERS and v1_layers is not None:
+    app.include_router(v1_layers.router,  prefix=V1)
 app.include_router(v1_ws.router,          prefix=V1)
 
 # ----- v2 mount -----
