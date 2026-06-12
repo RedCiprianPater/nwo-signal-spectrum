@@ -24,6 +24,7 @@ from app.redis_client import close_redis, init_redis
 from app.routes.v1 import agents as v1_agents
 from app.routes.v1 import apocalypse as v1_apocalypse
 from app.routes.v1 import auth as v1_auth
+from app.routes.v1 import global_layers as v1_layers  # NEW — GeoLibre layers
 from app.routes.v1 import network as v1_network
 from app.routes.v1 import signals as v1_signals
 from app.routes.v1 import spectrum as v1_spectrum
@@ -179,6 +180,7 @@ app.include_router(v1_agents.router,      prefix=V1)
 app.include_router(v1_network.router,     prefix=V1)
 app.include_router(v1_apocalypse.router,  prefix=V1)
 app.include_router(v1_spectrum.router,    prefix=V1)
+app.include_router(v1_layers.router,      prefix=V1)   # NEW — /api/v1/layers/*
 app.include_router(v1_ws.router,          prefix=V1)
 
 # ----- v2 mount -----
