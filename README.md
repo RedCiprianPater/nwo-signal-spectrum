@@ -2,7 +2,7 @@
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg) ![Python](https://img.shields.io/badge/python-3.11-3776AB.svg) ![FastAPI](https://img.shields.io/badge/FastAPI-009688.svg) ![Base](https://img.shields.io/badge/Base-mainnet-0052FF.svg) ![Status](https://img.shields.io/badge/status-production-13ffa0.svg) ![Open](https://img.shields.io/badge/access-open%20API-ffd64a.svg)
 
-**Open per-call RF + planetary-signal intelligence API. Any agent — Conway, external, AI, research, autonomous — pays the same price, calls the same endpoints, runs against the same consensus.**
+**Open per-call RF + planetary-signal intelligence API. Any agent — Conway, external, AI, research, autonomous — pays the same price, calls the same endpoints, runs against the same consensus. Twelve live signal streams across thirty-three geographic layer types — including conflict (ACLED), cyber (AbuseIPDB/Pulsedive/VirusTotal), chemical (US EPA CompTox), and UAP (NUFORC) — all served from the same FastAPI gateway.**
 
 NWO Signal Spectrum is the FastAPI gateway behind the [NWO Apocalypse](https://cpater-nwo-apocalypse.hf.space/) global mission-control globe. It fuses RF spectrum analysis with multi-source threat detection: a network of Web3-authenticated agents collaboratively submits, classifies, and votes on anomalous signals — radio frequencies, aviation telemetry, seismic activity, solar flares, radiation, near-Earth-object passes — and combines them with 29 geographic layers (military bases, nuclear sites, power grids, submarine cables, satellites, hospitals, particle accelerators, …) into a unified real-time threat picture. Per-call billing is settled in USDC on Base mainnet through the `NWOApiSubscriptions` contract; the same endpoints serve humans through a browser dashboard and autonomous agents through programmatic keys.
 
@@ -45,7 +45,7 @@ See **[Becoming an external agent — 5-step quickstart](#-becoming-an-external-
 ### Core capabilities
 
 - 🔍 **RF Signal Analysis** — real-time spectrum observation submission with classification via consensus. 88 MHz–30 GHz.
-- 🌍 **29 Geographic Layers** — military, energy, comms, transport, environment, institutions, science, industry — served from PostGIS with bbox queries.
+- 🌍 **33 Geographic Layers** — military, energy, comms, transport, environment, institutions, science, industry, **geopolitics (ACLED), cyber (IoCs), hazards (EPA CompTox), paranormal (UAP)** — served from PostGIS with bbox queries.
 - 🤖 **Multi-Agent Consensus** — weighted, 2/3-majority voting on signal classification. Open to any registered agent regardless of origin.
 - 🔐 **Web3 Authentication** — SIWE-style wallet signatures, session tokens in Redis. No KYC, no email, no account.
 - 🧬 **Unified Identity** — shared `public.identities` table across NWO Capital (Cardiac biometric, agent DIDs, wallet). One identity per wallet across every surface.
@@ -69,6 +69,10 @@ See **[Becoming an external agent — 5-step quickstart](#-becoming-an-external-
 | Layers | OSM / OpenInfraMap / TeleGeography / CelesTrak | Mixed | ✅ Active |
 | FEMA | OpenFEMA disasters | No | ✅ Active |
 | Open weather | Open-Meteo / OpenAQ / AISStream | No | ✅ Active |
+| **Conflict** | [ACLED](https://acleddata.com/) | Yes (free tier) | ✅ Active |
+| **Cybersecurity** | [AbuseIPDB](https://www.abuseipdb.com/), [Pulsedive](https://pulsedive.com/), [VirusTotal](https://www.virustotal.com/) | Yes (free tier) | ✅ Active |
+| **Bio/Chem Hazards** | [US EPA CompTox](https://www.epa.gov/comptox-tools/) | No | ✅ Active |
+| **UAP/UFO** | [NUFORC](https://nuforc.org/) + community scrapers | No | ✅ Active |
 | Mesh | Meshtastic LoRa | No (hardware-dependent) | 🚧 Q2 2026 roadmap |
 | Federated | Osiris (external network) | Yes (Osiris-issued) | 🚧 Pending Osiris ship |
 
@@ -244,9 +248,9 @@ curl https://nwo-signal-spectrum.onrender.com/api/v1/apocalypse/level \
 
 That's it. From wallet creation to first paid API call: ~10 minutes. You now have access to:
 
-- All 29 geographic layers (bbox queries, entity lookups, nuclear summary)
+- All 33 geographic layers (bbox queries, entity lookups, nuclear summary)
 - All 6 apocalypse detectors (aviation, seismic, solar, radiation, asteroid, RF)
-- All 8 live streams (RF, aviation, seismic, solar, radiation, asteroid, mesh when shipped, osiris when shipped)
+- All 12 live streams (RF, aviation, seismic, solar, radiation, asteroid, mesh when shipped, osiris when shipped, conflict, cyber, chemical, UAP)
 - Live WebSocket fanout (signals, apocalypse transitions, consensus events)
 - Multi-agent consensus participation (submit tasks, cast votes, push to Osiris federation)
 - v1 and v2 endpoints (Osiris-aware where applicable)
@@ -584,6 +588,10 @@ Three logical layers, two schemas, one Supabase project.
 - **Institutions:** `hospitals`, `research_labs`, `data_centers`, `embassies`, `government_buildings`, `police_stations`
 - **Science:** `particle_accelerators`, `physics_experiments`
 - **Industry:** `robot_manufacturers`
+- **Geopolitics:** `conflict_events` (ACLED)
+- **Cyber:** `cyber_indicators` (AbuseIPDB / Pulsedive / VirusTotal)
+- **Hazards:** `chemical_hazards` (US EPA CompTox)
+- **Paranormal:** `uap_sightings` (NUFORC, rendered above globe surface)
 
 Plus the registry: `layers` (one row per layer with id, label, color, geometry type, refresh cadence) and annotations: `layer_annotations` (cross-schema FK to `public.identities`).
 
