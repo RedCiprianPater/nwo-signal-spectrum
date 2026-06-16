@@ -54,9 +54,67 @@ services:
         sync: false
       - key: AISSTREAM_API_KEY
         sync: false
-      # Shared secret the cron service uses to call the protected
-      # /api/v1/layers/refresh-due endpoint. Generate once:
-      #   openssl rand -base64 32
+      # ----------------------------------------------------------
+      # v2.1 layer credentials. Each layer no-ops gracefully if
+      # the key is missing, but presence enables the ingester and
+      # populates the corresponding spectrum.* table.
+      # ----------------------------------------------------------
+      - key: ACLED_API_KEY              # conflict_events layer (ACLED free tier)
+        sync: false
+      - key: ABUSEIPDB_API_KEY          # cyber_indicators
+        sync: false
+      - key: PULSEDIVE_API_KEY          # cyber_indicators
+        sync: false
+      - key: VIRUSTOTAL_API_KEY         # cyber_indicators
+        sync: false
+      # ----------------------------------------------------------
+      # Consensus network gating.  RECOMMENDED EMPTY for public
+      # deployments — leave unset and any authenticated wallet
+      # can register as a network agent.  Populate (comma-separated
+      # wallet addresses) only if you intentionally want a curated
+      # private network.
+      # ----------------------------------------------------------
+      - key: NWO_AGENT_ALLOWLIST
+        sync: false
+      # ----------------------------------------------------------
+      # Shared secret the cron services use to call protected
+      # internal endpoints (/api/v1/layers/refresh-due,
+      # /api/v1/layers/bootstrap-country, /api/v1/apocalypse/check).
+      # Generate once:  openssl rand -base64 32
+      # Set the SAME value on every cron service below.
+      # ----------------------------------------------------------
+      - key: INTERNAL_CRON_TOKEN
+        sync: false
+
+  # ============================================================
+  # Cron — run the seven apocalypse detectors every 15 minutes
+  # ============================================================
+  # This is the heartbeat of the unified L ∈ {0..5} indicator.
+  # Without this cron, the apocalypse level only recomputes on
+  # manual trigger and goes stale within an hour. The endpoint
+  # runs all seven detectors (aviation, seismic, solar, radiation,
+  # asteroid, RF, RSS) and fuses to the unified level + δ_tie.
+  # ============================================================
+  - type: cron
+    name: nwo-spectrum-apocalypse-check
+    runtime: python
+    plan: starter
+    region: frankfurt
+    branch: main
+    schedule: "*/15 * * * *"
+    buildCommand: pip install --upgrade pip httpx
+    startCommand: |
+      python -c "
+      import os, httpx
+      url = os.environ['SERVICE_URL'].rstrip('/') + '/api/v1/apocalypse/check'
+      token = os.environ['INTERNAL_CRON_TOKEN']
+      r = httpx.post(url, headers={'Authorization': f'Bearer {token}'}, timeout=300)
+      print(r.status_code, r.text[:500])
+      r.raise_for_status()
+      "
+    envVars:
+      - key: SERVICE_URL
+        value: https://nwo-signal-spectrum.onrender.com
       - key: INTERNAL_CRON_TOKEN
         sync: false
 
@@ -67,7 +125,7 @@ services:
   # token. The /api/v1/layers/refresh-due endpoint iterates over
   # layers whose `last_run_at + refresh_minutes < now()` and runs
   # the corresponding ingester (satellites, flights, weather,
-  # ocean, atmosphere, geology, ships).
+  # ocean, atmosphere, geology, ships, conflict, cyber, uap).
   #
   # Render cron services run a one-shot command on the schedule
   # and exit; there is no long-running process to drain memory.
