@@ -1,8 +1,15 @@
 """/api/v1/apocalypse — threat level, alerts, checks, per-category endpoints.
 
 Direct port of handleApocalypse(). All 12 cases from the PHP handler are here:
-  level, alerts, check, aviation, seismic, solar, radiation, asteroid, history,
-  plus the dashboard summary (default).
+    level, alerts, check, aviation, seismic, solar, radiation, asteroid, history,
+    plus the dashboard summary (default).
+
+v2.1 change:
+    /check now accepts EITHER a user session OR the shared INTERNAL_CRON_TOKEN
+    so the Render cron service (which has no user identity) can run every 15
+    minutes without a 401. Every other endpoint keeps the strict session
+    requirement. See app/deps.py :: require_session_or_cron for the
+    matching auth-dependency implementation.
 """
 from __future__ import annotations
 
@@ -11,7 +18,7 @@ from typing import Any
 
 from fastapi import APIRouter, Query
 
-from app.deps import AuthSession, DbConn
+from app.deps import AuthSession, AuthSessionOrCron, DbConn
 from app.models import ApocalypseAlert, ApocalypseLevel
 from app.redis_client import broadcast
 from app.services import apocalypse_indicators as indicators
@@ -20,7 +27,6 @@ router = APIRouter(prefix="/apocalypse", tags=["apocalypse"])
 
 
 # ----- /level -----
-
 @router.get("/level", response_model=ApocalypseLevel)
 async def get_level(conn: DbConn, session: AuthSession) -> ApocalypseLevel:
     level = await indicators.current_level(conn)
@@ -28,7 +34,6 @@ async def get_level(conn: DbConn, session: AuthSession) -> ApocalypseLevel:
 
 
 # ----- /alerts -----
-
 @router.get("/alerts", response_model=list[ApocalypseAlert])
 async def list_alerts(
     conn: DbConn,
@@ -64,9 +69,16 @@ async def list_alerts(
 
 
 # ----- /check (cron) -----
-
+#
+# Called every 15 min by the nwo-spectrum-apocalypse-check Render cron
+# service with:
+#     Authorization: Bearer <INTERNAL_CRON_TOKEN>
+#
+# Still callable by any authenticated human for a manual trigger, because
+# require_session_or_cron falls back to normal session validation when
+# the bearer is not the cron token.
 @router.post("/check")
-async def run_checks(conn: DbConn, session: AuthSession) -> dict[str, Any]:
+async def run_checks(conn: DbConn, session: AuthSessionOrCron) -> dict[str, Any]:
     fresh = await indicators.run_all_checks(conn)
     if fresh:
         await broadcast("apocalypse:level", {"new_signals": len(fresh)})
@@ -74,7 +86,6 @@ async def run_checks(conn: DbConn, session: AuthSession) -> dict[str, Any]:
 
 
 # ----- Per-category endpoints -----
-
 @router.get("/aviation")
 async def aviation(
     conn: DbConn, session: AuthSession, region: str = "global"
@@ -108,7 +119,6 @@ async def asteroid(conn: DbConn, session: AuthSession) -> dict[str, Any] | None:
 
 
 # ----- /history -----
-
 @router.get("/history")
 async def history(
     conn: DbConn, session: AuthSession, hours: int = Query(24, ge=1, le=720)
@@ -117,12 +127,9 @@ async def history(
 
 
 # ----- default dashboard -----
-
 @router.get("")
 async def dashboard(conn: DbConn, session: AuthSession) -> dict[str, Any]:
-    row = await conn.fetchrow(
-        "SELECT * FROM apocalypse_dashboard"
-    )
+    row = await conn.fetchrow("SELECT * FROM apocalypse_dashboard")
     level = await indicators.current_level(conn)
     return {
         "current_level": level,
