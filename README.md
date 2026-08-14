@@ -1180,7 +1180,6 @@ MIT License — see `LICENSE`.
 ## Support
 
 - **GitHub Issues**: <https://github.com/RedCiprianPater/nwo-signal-spectrum/issues>
-- **Discord**: <https://discord.gg/nwo>
 - **Email**: dev@nwo.capital
 - **Platform**: <https://nwo.capital>
 - **Globe**: <https://cpater-nwo-apocalypse.hf.space/>
